@@ -129,6 +129,10 @@ display_targeted_moments(moments_stats, param);
 % Display untargeted moments (model predictions)
 display_untargeted_moments(moments_stats, param);
 
+% Model vs. paper targets (Tables 3-5), with the previous run for comparison;
+% also saved to calibration_table.csv
+calibration_table(moments_stats, param);
+
 % Generate plots and figures
 fprintf('   - Generating plots and figures...\n');
 % PlotSimul(agentPanel, param, valueFunc);
@@ -215,7 +219,7 @@ function display_targeted_moments(moments_stats,param)
     fprintf('Log wage dispersion:                   %6.3f   (target: 0.55-0.65)\n', ...
             moments_stats.wagedisp);
     fprintf('Wage loss per month unemployed:        %6.2f%%  (target: -1.0%%)\n', ...
-            100*moments_stats.wagechangeunemployment_per_period_logpct);
+            100*moments_stats.wagechangeunemployment_per_month_logpct);
     fprintf('CV Job offers:                         %6.2f%%  (target: 30-40%%)\n', ...
             100*moments_stats.stats_wages.cvOffers);
    
@@ -330,9 +334,9 @@ function display_untargeted_moments(moments_stats,param)
             100*moments_stats.corr_ability);
  
     
-    % --- Average age at (first) marriage ---
+    % --- Median age at first marriage (data: women 25.9, men 28.3) ---
     am = moments_stats.age_at_marriage;
-    fprintf('Average age at (first) marriage (years):  Women = %.2f,  Men = %.2f,  All = %.2f\n', ...
+    fprintf('Median age at first marriage (years):  Women = %.2f (target 25.9),  Men = %.2f (target 28.3),  All = %.2f\n', ...
             am.women_years, am.men_years, am.all_years);
     fprintf('=================================================================\n');
 

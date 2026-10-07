@@ -159,6 +159,21 @@ moments.men.unemployed           = numU_men / den_men;
 moments.haschild.unemployed      = numU_k   / den_k;
 moments.nochild.unemployed       = numU_nk  / den_nk;
 
+% ---- Out-of-LF share by marital status x gender x kids (paper Table 3).
+% Same person-time accounting as above: in couples both spouses count.
+gMask = {gF, gM};  pgMask = {pgF, pgM};  gName = {'women','men'};
+kMask = {KN, KK};  kName  = {'nokid','kid'};
+for gi = 1:2
+    for ki = 1:2
+        g = gMask{gi}; pg = pgMask{gi}; kk = kMask{ki};
+        nm = ['single_'  gName{gi} '_' kName{ki}];
+        mm = ['married_' gName{gi} '_' kName{ki}];
+        moments.olf_cells.(nm) = sum(O & single & g & kk,'all') / max(sum(single & g & kk,'all'), SMALL);
+        moments.olf_cells.(mm) = (sum(O & married & g & kk,'all') + sum(pO & married & pg & kk,'all')) / ...
+                                 max(sum(married & g & kk,'all') + sum(married & pg & kk,'all'), SMALL);
+    end
+end
+
 %% ========== 2) Transitions by gender (MONTHLY) ==========================
 tr_step_f = transitions_by_gender(fem,  U, E, O, T);
 tr_step_m = transitions_by_gender(male, U, E, O, T);
@@ -473,13 +488,15 @@ else
                                 'high',struct('mean_share',NaN),'mean_share',NaN);
 end
 
-%% ========== 8) Average age at (first) marriage (years) ==================
+%% ========== 8) Median age at (first) marriage (years of age) ============
 moments.age_at_marriage.women_years = NaN;
 moments.age_at_marriage.men_years   = NaN;
 moments.age_at_marriage.all_years   = NaN;
 
 if isfield(agentPanel,'age')
-    AgeM = agentPanel.age;  % months
+    AgeM = agentPanel.age;  % months since (re)birth, used to find rebirths
+    % chronological age in months (entry at param.entry_age_years, 25 by default)
+    if isfield(agentPanel,'age_chron'), AgeC = agentPanel.age_chron; else, AgeC = AgeM + 25*12; end
     if isfield(agentPanel,'newborn')
         NEWB = agentPanel.newborn == 1;
     else
@@ -498,7 +515,7 @@ if isfield(agentPanel,'age')
             trans = find( (~M(i,t0:t1-1)) & M(i,t0+1:t1), 1, 'first');
             if ~isempty(trans)
                 t_mar = t0 + trans;
-                age_mar_years = AgeM(i,t_mar)/12;
+                age_mar_years = AgeC(i,t_mar)/12;
                 if isfinite(age_mar_years) && age_mar_years>=0
                     if fem(i), ages_w(end+1,1) = age_mar_years; %#ok<AGROW>
                     else       

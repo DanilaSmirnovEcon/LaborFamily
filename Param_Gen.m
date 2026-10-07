@@ -43,6 +43,7 @@ param.w.min = 10;%1.5;              % Minimum wage offer
 param.w.max = 30;%4.0;              % Maximum wage offer
 param.w.n = 9;                  % Number of wage grid points
 ParetoFlat = 15;%5;  % Shape parameter (smaller = steeper dropoff)
+param.theta_w = 0.90;           % Gender wage-offer gap: women's offers are theta_w x men's (paper Table 2)
 
 % Productivity parameters
 param.a.min = 0.00;%0.75;             % Minimum productivity level
@@ -77,8 +78,6 @@ param.tremble = 1e-1;         % Trembling hand parameter for marriage decisions
 
 % Fertility parameters
 param.pcp = 0.005;%0.005;              % Monthly probability of children for couples
-param.partner_kid_prob_male=0.0005;
-param.partner_kid_prob_female=0.002;
 
 % Spousal complementarity
 param.l = @(af, am) -0.0.*abs(exp(af) - exp(am)).^1.0; % Utility from spousal match quality

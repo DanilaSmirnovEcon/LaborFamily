@@ -237,9 +237,6 @@ parfor i = 1:N
                 end
                 if isF
                     pm = samplerPartnerM(1);
-                    % track partner features at the meet
-                    p_kid_partner = param.partner_kid_prob_male;
-                    pm.has_kids = pm.has_kids || (rand < p_kid_partner);
                     hk = k(t) || pm.has_kids;
                     if in_keep
                         meet_partnerKids_cnt(i) = meet_partnerKids_cnt(i) + double(pm.has_kids);
@@ -274,7 +271,6 @@ parfor i = 1:N
                     
                     % ----- update counters USING FINAL DECISION -----
                     if in_keep
-                        meet_cnt(i) = meet_cnt(i) + 1;
                         if accept
                             accept_cnt(i) = accept_cnt(i) + 1;
                         else
@@ -292,20 +288,11 @@ parfor i = 1:N
                     end
                 else
                     pf = samplerPartnerF(1);
-                    p_kid_partner = param.partner_kid_prob_female;
-                    pf.has_kids = pf.has_kids || (rand < p_kid_partner);
                     hk = k(t) || pf.has_kids;
                     if in_keep
                         meet_partnerKids_cnt(i) = meet_partnerKids_cnt(i) + double(pf.has_kids);
                         meet_partnerW_sum(i)    = meet_partnerW_sum(i)    + max(0, pf.wage);
                     end
-                    % if in_keep
-                    %     meet_partnerKids_cnt(i) = meet_partnerKids_cnt(i) + double(pf.has_kids);
-                    %     meet_partnerW_sum(i)    = meet_partnerW_sum(i)    + max(0, pf.wage);
-                    % end
-                    % p_kid_partner = param.partner_kid_prob_female; % calibrate this
-                    % pf.has_kids = pf.has_kids || (rand < p_kid_partner);
-                    % hk = k(t) || pf.has_kids;
                     if param.always_marry
                     % Force marriage: accept partner without value comparisons
                     m(t)=1; mo(t)=1; k(t)=hk;
@@ -334,7 +321,6 @@ parfor i = 1:N
                     
                     % ----- update counters USING FINAL DECISION -----
                     if in_keep
-                        meet_cnt(i) = meet_cnt(i) + 1;
                         if accept
                             accept_cnt(i) = accept_cnt(i) + 1;
                         else
