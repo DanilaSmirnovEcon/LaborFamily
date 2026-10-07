@@ -83,10 +83,13 @@ pf.pcs = 0.0004;%0.0004;                % Monthly probability of having children
 %% ENTRY DISTRIBUTION
 %==========================================================================
 
-% Distribution of productivity for newly entering female agents
-% Log-normal, a0 ~ logN(aergmean, aergvar), consistent with BuildDoubleGrid.m
-pf.a.erg = lognpdf(gridSf.a.a + gridSf.a.da, pf.aergmean, sqrt(pf.aergvar));
-pf.a.erg = pf.a.erg ./ sum(pf.a.erg);  % Normalize to sum to 1
+% Productivity of newborn female agents (paper: a0 ~ log-normal truncated
+% to [a_min, a_max]). Each grid node gets the probability of its own cell
+% (midpoints between nodes, half-cells at the edges), renormalized for the
+% truncation. SimulatePanel draws a0 from the same truncated distribution.
+edgesA   = [gridSf.a.min; (gridSf.a.a(1:end-1) + gridSf.a.a(2:end))/2; gridSf.a.max];
+pf.a.erg = diff(logncdf(edgesA, pf.aergmean, sqrt(pf.aergvar)));
+pf.a.erg = pf.a.erg ./ sum(pf.a.erg);
 
 %==========================================================================
 %% STORE IN PARAMETER STRUCTURE

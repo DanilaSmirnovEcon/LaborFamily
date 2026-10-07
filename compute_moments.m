@@ -69,12 +69,11 @@ pO     = agentPanel.partner_olf      == 1;
 pKnown = ~isnan(agentPanel.partner_employed) | ~isnan(agentPanel.partner_olf);
 pU     = (~pE & ~pO) & pKnown;
 
-% Realized wages / abilities (self & partner)
+% Realized wages / abilities (self & partner). Earnings come from the
+% simulation, which already applies the child wage cut (SimulatePanel.m).
 A   = agentPanel.ability;
-W   = exp(agentPanel.ability) .* agentPanel.wage;                 % self
-W   = W.*param.fkidwpenalty.*(agentPanel.female) + W.*(1-agentPanel.female);
-pW  = exp(agentPanel.partner_ability) .* agentPanel.partner_wage; % partner
-pW  = pW.*param.fkidwpenalty.*(1-agentPanel.female) + pW.*(agentPanel.female);
+W   = agentPanel.earnings;           % self
+pW  = agentPanel.partner_earnings;   % partner
 WO  = agentPanel.wage;     % offer wage (self)
 pWO = agentPanel.partner_wage;
 

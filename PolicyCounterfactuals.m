@@ -8,12 +8,15 @@
 %                       households with a dependent child only (k=1)
 %
 % For each policy (plus the baseline, solved fresh here for a
-% consistent comparison point), this script solves the model once and
-% simulates it twice:
-%   - agentPanel_endog: endogenous, bilateral marriage decisions (SimulatePanel)
+% consistent comparison point), this script solves and simulates twice:
+%   - agentPanel_endog: endogenous, bilateral marriage decisions
+%                       (SolveEndogProblem + SimulatePanel)
 %   - agentPanel_exog:  the exogenous-marriage counterfactual used for the
 %                       "without endogenous marriage" comparison in
-%                       Table 5/tab:decom (SimulatePanelCounter)
+%                       Table 5/tab:decom. Values are re-solved with a zero
+%                       meeting rate (param.m = 0), so nobody expects to
+%                       meet; SimulatePanelCounter then gives each newborn a
+%                       one-off marriage draw at birth.
 %
 % This script is NOT called from Main.m; run it manually. It only wires
 % up the parameter changes and the solve/simulate pipeline and reports
@@ -22,7 +25,7 @@
 % fiscal-expenditure comparisons in Tables 6-9 - those were computed
 % separately and are not reproduced here.
 %
-% Expect this to take roughly 3x as long as a single run of Main.m.
+% Expect this to take roughly 6x as long as a single run of Main.m.
 %==========================================================================
 
 clear all; close all;
@@ -82,9 +85,14 @@ for k = 1:numel(policies)
     agentPanel_endog = SimulatePanel(solutionSP, valueFunc, gridSf, gridSm, gridP, param, simParam);
     moments_endog = compute_moments(agentPanel_endog, simParam, param);
 
-    % ---- 4b. Simulate with the exogenous-marriage counterfactual ----
-    agentPanel_exog = SimulatePanelCounter(solutionSP, valueFunc, gridSf, gridSm, gridP, param, simParam);
-    moments_exog = compute_moments(agentPanel_exog, simParam, param);
+    % ---- 4b. Exogenous-marriage counterfactual: values with no meetings ----
+    param_x   = param;
+    param_x.m = 0;
+    solutionSP_x = SolveEndogProblem(solutionSf, solutionSm, false, true, ...
+                                     param_x, gridSf, gridSm, gridP);
+    valueFunc_x  = approximateValueFunctions(solutionSP_x, gridSf, gridSm, gridP, param_x);
+    agentPanel_exog = SimulatePanelCounter(solutionSP_x, valueFunc_x, gridSf, gridSm, gridP, param_x, simParam);
+    moments_exog = compute_moments(agentPanel_exog, simParam, param_x);
 
     % ---- 5. Store and save ----
     results.(name).param         = param;

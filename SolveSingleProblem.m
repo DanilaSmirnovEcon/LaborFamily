@@ -67,13 +67,11 @@ function solutionS = SolveSingleProblem(param, pg, gridS)
     nVar = size(Aall,1);
     rhs  = zeros(nVar+1,1);
 
-    % Optional demographic injection into Ul rows (if fields exist)
-    if isfield(param,'zeta') && isfield(pg,'a') && isfield(pg.a,'erg') ...
-       && numel(pg.a.erg)==gridS.a.n
-        ul_lo =  (pg.NS) + 1;                 % Jl block size = pg.NS
-        ul_hi =  (pg.NS) + gridS.a.n;
-        rhs(ul_lo:ul_hi) = rhs(ul_lo:ul_hi) - param.zeta * pg.a.erg(:);
-    end
+    % Newborns replace retirees at rate zeta and enter single, out of the
+    % labor force and without kids (paper, Section 2.1): inflow into Ol rows.
+    ol_lo = 2*pg.NSall + 1;               % Ol block follows [Jl; Ul; Jc; Uc]
+    ol_hi = 2*pg.NSall + gridS.a.n;
+    rhs(ol_lo:ol_hi) = rhs(ol_lo:ol_hi) - param.zeta * pg.a.erg(:);
 
     % normalization row
     Msys     = [Aall.'; ones(1,nVar)];
@@ -277,7 +275,9 @@ function solutionS = SolveSingleProblem(param, pg, gridS)
         u    = util(param, cons) .* ones(gridS.a.n,1);
     end
     function u = instUtilityJc
-        cons = param.onekid_tax(W_eff, AA, param).*param.fkidwpenalty - repmat(c_a,1,gridS.w.n) +param.t;
+        % Single parents earn fkidwpenalty x the wage, regardless of gender
+        % (cut applied to gross earnings, as in SolveEndogProblem.m)
+        cons = param.onekid_tax(W_eff.*param.fkidwpenalty, AA, param) - repmat(c_a,1,gridS.w.n) +param.t;
         u    = util(param, cons);
     end
 
