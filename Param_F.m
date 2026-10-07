@@ -39,8 +39,11 @@ pf.aergvar = 0.805;%0.205;              % Variance of entry productivity (log sc
 %% LABOR MARKET PARAMETERS
 %==========================================================================
 
+% Wage offers: women draw the same offer distribution as men, scaled by theta_w
+pf.wscale = param.theta_w;
+
 % Job destruction and search
-pf.delta = 0.015;               % Monthly job separation rate (paper Table 2: higher than males)
+pf.delta = 0.015;              % Monthly job separation rate (paper Table 2: higher than males)
 
 % Search intensity by employment status
 pf.lambda = 0;                  % Search intensity when employed (on-the-job search)

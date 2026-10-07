@@ -44,8 +44,8 @@ gridS.a.da2 = gridS.a.da^2;                                  % Grid spacing squa
 %--------------------------------------------------------------------------
 % Wage grid  
 %--------------------------------------------------------------------------
-gridS.w.min = param.w.min;
-gridS.w.max = param.w.max;
+gridS.w.min = pg.wscale * param.w.min;   % women: scaled by theta_w
+gridS.w.max = pg.wscale * param.w.max;
 gridS.w.w = linspace(gridS.w.min, gridS.w.max, gridS.w.n);   % Grid vector
 gridS.w.ww = ones(gridS.a.n, 1) * gridS.w.w;                % Grid matrix (a � w)
 gridS.w.dw = (gridS.w.max - gridS.w.min) / (gridS.w.n - 1); % Grid spacing

@@ -40,8 +40,11 @@ pm.aergvar = 0.805;%0.205;              % Variance of entry productivity (log sc
 %% LABOR MARKET PARAMETERS
 %==========================================================================
 
+% Wage offers: men draw the unscaled offer distribution
+pm.wscale = 1;
+
 % Job destruction and search
-pm.delta = 0.012;               % Monthly job separation rate (paper Table 2: lower than females)
+pm.delta = 0.012;              % Monthly job separation rate (paper Table 2: lower than females)
 
 % Search intensity by employment status
 pm.lambda = 0;                  % Search intensity when employed (on-the-job search)

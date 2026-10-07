@@ -49,8 +49,8 @@ gridP.af.da = (gridP.af.max - gridP.af.min) / (gridP.af.n - 1);
 gridP.af.da2 = gridP.af.da^2;
 
 % Female wage offer grid
-gridP.wf.min = param.w.min;
-gridP.wf.max = param.w.max;
+gridP.wf.min = param.pf.wscale * param.w.min;   % scaled by theta_w
+gridP.wf.max = param.pf.wscale * param.w.max;
 gridP.wf.w = linspace(gridP.wf.min, gridP.wf.max, gridP.wf.n)';
 
 % Create 4D female wage array: (af, wf, am, wm)
@@ -79,8 +79,8 @@ gridP.am.da = (gridP.am.max - gridP.am.min) / (gridP.am.n - 1);
 gridP.am.da2 = gridP.am.da^2;
 
 % Male wage offer grid
-gridP.wm.min = param.w.min;
-gridP.wm.max = param.w.max;
+gridP.wm.min = param.pm.wscale * param.w.min;
+gridP.wm.max = param.pm.wscale * param.w.max;
 gridP.wm.w = linspace(gridP.wm.min, gridP.wm.max, gridP.wm.n)';
 
 % Create 4D male wage array: (af, wf, am, wm)
