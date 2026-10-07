@@ -249,27 +249,12 @@ uOOc = [reshape(uOOc, gridP.af.n*gridP.am.n,1)];
 % Solve for the values
 difff=1; diffS=1;
 
-% This is needed only for the distributions of single for the marriage
-% market search, so not updated anymore
-param_s=param;
-param_s.Sdimmult=1;
-[param_s, gridS_sf] = Param_F(param_s);
-[param_s, gridS_sm] = Param_M(param_s);
-[param_s, ~] = BuildDoubleGrid(param_s, true);
-
-ParetoFlat = 1; 
-wvec = linspace(param_s.w.min, param_s.w.max, (param_s.w.n-1)*param_s.Sdimmult + 1);
-dw   = (param_s.w.max - param_s.w.min) / ((param_s.w.n-1)*param_s.Sdimmult);   % <-- removed +1
-param_s.f_long = gppdf(wvec, 0, ParetoFlat, 0) .* dw;
-param_s.f_long(end) = param_s.f_long(end) + (1 - gpcdf(param_s.w.max, 0, ParetoFlat, 0));
-s = sum(param_s.f_long);
-if abs(s-1) > 1e-8
-    param_s.f_long = param_s.f_long / s;
-    warning('Normalized param_s.f_long to sum to 1');
-end
-
-solutionSf_s = SolveSingleProblem(param_s,param_s.pf, gridS_sf);
-solutionSm_s = SolveSingleProblem(param_s,param_s.pm, gridS_sm);
+% Marriage-market pool: the stationary distribution of singles in the
+% no-marriage problem, solved with the same parameters and grids as the
+% full problem. It is held fixed (not updated with the equilibrium) so the
+% pool of potential partners does not become an extra fixed point.
+solutionSf_s = SolveSingleProblem(param, param.pf, gridSf);
+solutionSm_s = SolveSingleProblem(param, param.pm, gridSm);
 solutionSP.solutionSf_s = solutionSf_s;
 solutionSP.solutionSm_s = solutionSm_s;
 
@@ -892,12 +877,12 @@ if any(Aoff(:) < -tol)
     error('A has negative off-diagonals after correction.');
 end
 
-% (d) Pick a safe rho (strictly larger than the biggest total exit rate)
-maxRate = full(max(-diag(A)));
-rho_use = max(param.rho, 1.2*maxRate);   % margin helps conditioning
-rho_use = param.rho;
+% (d) Discounting. Step (b) zeroes every row sum, which also removes the
+% retirement exit (-zeta) that the C-blocks put on the diagonal. Retirement
+% is an exit to a zero-value absorbing state, so it is restored here as
+% extra discounting: (rho + zeta) V = u + A V, as in the paper's HJB.
+rho_use = param.rho + param.zeta;
 
-% Now build B with the safe rho
 B = rho_use .* speye(nr) - A;
 u = [u_LLL; u_OOL; u_OLO; u_OO];
 

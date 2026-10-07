@@ -94,21 +94,7 @@ gridP.am.mu_u = param.pm.mu_u * (param.a.min - gridP.am.aa);   % Unemployed drif
 gridP.am.var = (param.pm.a_sigma^2) / 2;                       % Diffusion coefficient
 
 %--------------------------------------------------------------------------
-% 4. ERGODIC DISTRIBUTIONS FOR NEW COUPLES
-%--------------------------------------------------------------------------
-
-% Female entry distribution (used when forming new couples)
-param.pf.a.Perg = lognpdf(gridP.af.a + gridP.af.da, param.pf.aergmean, ...
-                          sqrt(param.pf.aergvar)); 
-param.pf.a.Perg = param.pf.a.Perg ./ sum(param.pf.a.Perg);
-
-% Male entry distribution (used when forming new couples)
-param.pm.a.Perg = lognpdf(gridP.am.a + gridP.am.da, param.pm.aergmean, ...
-                          sqrt(param.pm.aergvar)); 
-param.pm.a.Perg = param.pm.a.Perg ./ sum(param.pm.a.Perg);
-
-%--------------------------------------------------------------------------
-% 5. STATE SPACE DIMENSIONS
+% 4. STATE SPACE DIMENSIONS
 %--------------------------------------------------------------------------
 
 % Total number of states for different employment combinations
@@ -117,7 +103,7 @@ param.NPall = param.NP + param.NP/gridP.wm.n + param.NP/gridP.wf.n + ...
               gridP.af.n * gridP.am.n;  % All employment combinations
 
 %--------------------------------------------------------------------------
-% 6. TRANSITION MATRIX CONSTRUCTION (OPTIONAL)
+% 5. TRANSITION MATRIX CONSTRUCTION (OPTIONAL)
 %--------------------------------------------------------------------------
 
 % Build transition matrices for couple productivity evolution (computationally intensive)

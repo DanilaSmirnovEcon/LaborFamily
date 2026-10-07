@@ -34,9 +34,6 @@ if ~isfield(simParam,'burn_step_months'), simParam.burn_step_months = 0.25; end 
 if ~isfield(simParam,'sim_periods'),      simParam.sim_periods = 120; end        % 10 years monthly
 if ~isfield(simParam,'sim_step_months'),  simParam.sim_step_months = 0.25; end   % 1 week
 
-if ~isfield(param,'fkidwpenalty'), param.fkidwpenalty = 0; end
-param.fpem = 0;%max(0, min(1, param.fkidwpenalty));     % clamp to [0,1]
-
 if ~isfield(param,'entry_age_years'), param.entry_age_years = 25; end
 age0_m = param.entry_age_years * 12;   % months
 
@@ -102,16 +99,18 @@ newborn          = O;             % =1 at (re)birth
 rng(simParam.seed,'twister');
 female = rand(N,1) < 0.5;
 
-% Initial ability draw by gender
+% Entry ability by gender: truncated log-normal (see draw_entry_ability),
+% from pre-drawn uniforms; U_entry(:,t) is also used at rebirths.
+U_entry = rand(N,T_total);
 a0 = zeros(N,1);
 iF = female; iM = ~female;
-a0(iF) = clip(exp(randn(sum(iF),1).*sqrt(param.pf.aergvar) + param.pf.aergmean), param.a.min, param.a.max);
-a0(iM) = clip(exp(randn(sum(iM),1).*sqrt(param.pm.aergvar) + param.pm.aergmean), param.a.min, param.a.max);
+a0(iF) = draw_entry_ability(U_entry(iF,1), param.pf, param);
+a0(iM) = draw_entry_ability(U_entry(iM,1), param.pm, param);
 
-% t=1 initialization
+% t=1 initialization: born single, out of the labor force, no kids (paper, Section 2.1)
 ability(:,1) = a0;
 employed(:,1) = 0;
-olf(:,1)      = 0;   % <<< CHANGED: newborns start OLF, not unemployed
+olf(:,1)      = 1;
 married(:,1)  = 0;
 has_kids(:,1) = 0;
 wage(:,1)     = 0;
@@ -122,9 +121,9 @@ newborn(:,1)    = 1;
 % Initial value function (OLF, no kids)
 for i = 1:N
     if female(i)
-        value_now(i,1) = valueFunc.single_female.unemployed_nokid(ability(i,1));  % <<< CHANGED
+        value_now(i,1) = valueFunc.single_female.olf_nokid(ability(i,1));
     else
-        value_now(i,1) = valueFunc.single_male.unemployed_nokid(ability(i,1));    % <<< CHANGED
+        value_now(i,1) = valueFunc.single_male.olf_nokid(ability(i,1));
     end
 end
 
@@ -182,6 +181,13 @@ meet_partnerW_sum    = zeros(N,1);
 
 % ======================== Core simulation ================================
 parfor i = 1:N
+    % Draws made inside the loop (partner sampler, partner kids) come from
+    % substream i of a stream seeded with simParam.seed, so results do not
+    % depend on which worker runs agent i or on the pool size.
+    st = RandStream('mlfg6331_64', 'Seed', simParam.seed);
+    st.Substream = i;
+    RandStream.setGlobalStream(st);
+
     % local paths (row vectors)
     a  = ability(i,:); e = employed(i,:); o = olf(i,:); m = married(i,:);
     k  = has_kids(i,:); w = wage(i,:);
@@ -242,16 +248,8 @@ parfor i = 1:N
 
                     if param.always_marry
                     % Force marriage: accept partner without value comparisons
-                    % --- compute these before overwriting k(t) ---
-                    k_pre = k(t);                 % after step_single_h (includes births this step)                    
                     m(t)=1; mo(t)=1; k(t)=hk;
                     pa(t)=pm.ability; pe(t)=pm.employed; po(t)=pm.olf; pw(t)=pm.wage;
-
-                    % Adoption penalty: only if she had no kids before, partner had kids,
-                    % and she is currently employed.
-                    if isF && e(t)==1 && (k_pre==0) && pm.has_kids
-                        w(t) = w(t) * (1 - param.fpem);
-                    end
                     else
                     V_self_s = getSingleValue(a(t), e(t), w(t), o(t), k(t), true,  valueFunc);
                     V_part_s = getSingleValue(pm.ability, pm.employed, pm.wage, pm.olf, pm.has_kids, false, valueFunc);
@@ -287,14 +285,8 @@ parfor i = 1:N
                     end
 
                     if accept %V_self_m > V_self_s && V_part_m > V_part_s
-                        % capture pre-marriage kids flag (after step_single_h; births this step already counted)
-                        k_pre = k(t);
                         m(t)=1; mo(t)=1; k(t)=hk;
                         pa(t)=pm.ability; pe(t)=pm.employed; po(t)=pm.olf; pw(t)=pm.wage;
-                        % Adoption penalty ONLY: she had no kids, partner had kids, and she’s employed
-                        if e(t)==1 && (k_pre==0) && pm.has_kids
-                            w(t) = w(t) * (1 - param.fpem);
-                        end
                     end
 
                     end
@@ -316,14 +308,8 @@ parfor i = 1:N
                     % hk = k(t) || pf.has_kids;
                     if param.always_marry
                     % Force marriage: accept partner without value comparisons
-                    % --- compute these before overwriting k(t) ---
-                    k_pre = k(t);                 % after step_single_h (includes births this step)
                     m(t)=1; mo(t)=1; k(t)=hk;
                     pa(t)=pf.ability; pe(t)=pf.employed; po(t)=pf.olf; pw(t)=pf.wage;
-                    % Adoption penalty: she had no kids, man had kids (k_pre==1), and she’s employed
-                    if pe(t)==1 && (pf.has_kids==0) && (k_pre==1)
-                        pw(t) = pw(t) * (1 - param.fpem);
-                    end
                     else
                     V_self_s = getSingleValue(a(t), e(t), w(t), o(t), k(t), false, valueFunc);
                     V_part_s = getSingleValue(pf.ability, pf.employed, pf.wage, pf.olf, pf.has_kids, true,  valueFunc);
@@ -359,14 +345,8 @@ parfor i = 1:N
                     end
 
                     if accept %V_self_m > V_self_s && V_part_m > V_part_s
-                        k_pre = k(t);
                         m(t)=1; mo(t)=1; k(t)=hk;
                         pa(t)=pf.ability; pe(t)=pf.employed; po(t)=pf.olf; pw(t)=pf.wage;
-                        % Adoption penalty for female partner ONLY:
-                        % she had no kids, man had kids (k_pre==1), and she’s employed
-                        if pe(t)==1 && (pf.has_kids==0) && (k_pre==1)
-                            pw(t) = pw(t) * (1 - param.fpem);
-                        end
                     end
 
                     end
@@ -387,17 +367,17 @@ parfor i = 1:N
 
         % ---- Attrition (death) ----
         if (u_die > exp(-param.zeta * h))
-            % reset to newborn
+            % reset to newborn: single, out of the labor force, no kids
             ag(t) = 0; nb(t) = 1; agc(t) = age0_m;
-            m(t) = 0; e(t) = 0; o(t) = 0;  % <<< CHANGED: newborns start unemployed
+            m(t) = 0; e(t) = 0; o(t) = 1;
             w(t) = 0; k(t) = 0;
             pa(t)=NaN; pe(t)=NaN; po(t)=NaN; pw(t)=NaN; mo(t)=0; jo(t)=0;
             if isF
-                a(t) = clip(exp(randn*sqrt(param.pf.aergvar) + param.pf.aergmean), param.a.min, param.a.max);
-                value_now_i = valueFunc.single_female.unemployed_nokid(a(t));  % <<< CHANGED
+                a(t) = draw_entry_ability(U_entry(i,t), param.pf, param);
+                value_now_i = valueFunc.single_female.olf_nokid(a(t));
             else
-                a(t) = clip(exp(randn*sqrt(param.pm.aergvar) + param.pm.aergmean), param.a.min, param.a.max);
-                value_now_i = valueFunc.single_male.unemployed_nokid(a(t));    % <<< CHANGED
+                a(t) = draw_entry_ability(U_entry(i,t), param.pm, param);
+                value_now_i = valueFunc.single_male.olf_nokid(a(t));
             end
             V(t) = value_now_i;
         end
@@ -484,6 +464,17 @@ newborn          = newborn(:, cols);
 % If you don't track divorces explicitly, keep zeros with correct size:
 divorce          = zeros(N, numel(cols));
 
+% Realized earnings = wage offer x exp(ability), with the child wage cut
+% (param.fkidwpenalty) applied as in the value functions: to single parents
+% of either gender, and to the woman in a couple with a child. The state
+% variable `wage` stays the uncut offer, since value functions are indexed
+% by it.
+kidCut           = 1 - param.fkidwpenalty;
+selfCut          = (has_kids==1) & ((married==0) | female);
+partnerCut       = (has_kids==1) & (married==1) & ~female;   % partner is the woman
+earnings         = exp(ability)         .* wage         .* (1 - kidCut.*selfCut);
+partner_earnings = exp(partner_ability) .* partner_wage .* (1 - kidCut.*partnerCut);
+
 % ====================== ASSEMBLE agentPanel ======================
 agentPanel = struct();
 agentPanel.id               = (1:N)';
@@ -495,11 +486,13 @@ agentPanel.olf              = olf;
 agentPanel.married          = married;
 agentPanel.has_kids         = has_kids;
 agentPanel.wage             = wage;
+agentPanel.earnings         = earnings;
 
 agentPanel.partner_ability  = partner_ability;
 agentPanel.partner_employed = partner_employed;
 agentPanel.partner_olf      = partner_olf;
 agentPanel.partner_wage     = partner_wage;
+agentPanel.partner_earnings = partner_earnings;
 
 agentPanel.value            = value_now;
 agentPanel.job_offer        = job_offer;
@@ -543,9 +536,6 @@ if is_female
     a_sig = param.pf.a_sigma;  mu    = param.pf.mu;        mu_u  = param.pf.mu_u;  amean = param.pf.amean;
     draw_idx = @(u) max(1, discretize(min(max(u, realmin), 1 - eps), edges_f));
     draw_w   = @(u) wgrid_f(draw_idx(min(max(u, realmin), 1 - eps)));
-    % draw_idx_f  = @(u) max(1, discretize(min(max(u, realmin), 1 - eps), edges_f));
-    % grid_now_f  = wgrid_f .* (1 - param.fpem*double(has_kids~=0));
-    % draw_w      = @(u) grid_now_f(draw_idx_f(min(max(u, realmin), 1 - eps)));
 else
     vF = valueFunc.single_male;
     lam_u = param.pm.lambda_u; lam_o = param.pm.lambda_o; delta = param.pm.delta; lam_oE = param.pm.lambda_oE;%%
@@ -632,10 +622,6 @@ else
     kids_t = has_kids;
 end
 
-if is_female && emp_t && (birth_t==1)
-    w_t = w_t * (1 - param.fpem);
-end
-
 % --- Clamp E/OLF invariants & sanitize wage ------------------------------
 emp_t = double(emp_t~=0);
 olf_t = double(olf_t~=0);
@@ -698,33 +684,21 @@ if is_female
     a_sig = param.pf.a_sigma;  mu    = param.pf.mu;        mu_u = param.pf.mu_u;  amean = param.pf.amean;
     draw_idx_self = @(u) max(1, discretize(min(max(u, realmin), 1 - eps), edges_f));
     draw_w_self   = @(u) wgrid_f(draw_idx_self(min(max(u, realmin), 1 - eps)));
-    % draw_idx_self = @(u) max(1, discretize(min(max(u, realmin), 1 - eps), edges_f));
-    % grid_self_now = wgrid_f .* (1 - param.fpem*double(kids_t~=0));  % <- kids_t is the couple’s current kids flag
-    % draw_w_self   = @(u) grid_self_now(draw_idx_self(min(max(u, realmin), 1 - eps)));
 
     p_lam_u = param.pm.lambda_u; p_lam_o = param.pm.lambda_o; p_delta = param.pm.delta; p_lam_oE = param.pm.lambda_oE;%%
     p_a_sig = param.pm.a_sigma;  p_mu    = param.pm.mu;       p_mu_u  = param.pm.mu_u; p_amean = param.pm.amean;
     draw_idx_p   = @(u) max(1, discretize(min(max(u, realmin), 1 - eps), edges_m));
     draw_w_part  = @(u) wgrid_m(draw_idx_p(min(max(u, realmin), 1 - eps)));
-    % draw_idx_p   = @(u) max(1, discretize(min(max(u, realmin), 1 - eps), edges_m));
-    % grid_part_now = wgrid_m;
-    % draw_w_part  = @(u) grid_part_now(draw_idx_p(min(max(u, realmin), 1 - eps)));
 else
     lam_u = param.pm.lambda_u; lam_o = param.pm.lambda_o; delta = param.pm.delta; lam_oE = param.pm.lambda_oE;%%
     a_sig = param.pm.a_sigma;  mu    = param.pm.mu;        mu_u = param.pm.mu_u;  amean = param.pm.amean;
     draw_idx_self = @(u) max(1, discretize(min(max(u, realmin), 1 - eps), edges_m));
     draw_w_self   = @(u) wgrid_m(draw_idx_self(min(max(u, realmin), 1 - eps)));
-    % draw_idx_self = @(u) max(1, discretize(min(max(u, realmin), 1 - eps), edges_m));
-    % grid_self_now = wgrid_m;
-    % draw_w_self   = @(u) grid_self_now(draw_idx_self(min(max(u, realmin), 1 - eps)));
 
     p_lam_u = param.pf.lambda_u; p_lam_o = param.pf.lambda_o; p_delta = param.pf.delta; p_lam_oE = param.pf.lambda_oE;%%
     p_a_sig = param.pf.a_sigma;  p_mu    = param.pf.mu;       p_mu_u  = param.pf.mu_u; p_amean = param.pf.amean;
     draw_idx_p   = @(u) max(1, discretize(min(max(u, realmin), 1 - eps), edges_f));
     draw_w_part  = @(u) wgrid_f(draw_idx_p(min(max(u, realmin), 1 - eps)));
-    % draw_idx_p    = @(u) max(1, discretize(min(max(u, realmin), 1 - eps), edges_f));
-    % grid_part_now = wgrid_f .* (1 - param.fpem*double(kids_t~=0));
-    % draw_w_part   = @(u) grid_part_now(draw_idx_p(min(max(u, realmin), 1 - eps)));
 end
 p_birth = param.pcp;
 
@@ -871,14 +845,6 @@ a_t = clipa(a_t);
 if ~kids_t && birth_hit
     kids_t  = 1;
     birth_t = 1;
-end
-
-if birth_t==1
-    if is_female && emp_t
-        w_t = w_t * (1 - param.fpem);
-    elseif (~is_female) && p_e_t
-        p_w_t = p_w_t * (1 - param.fpem);
-    end
 end
 
 % --- Clamp partner -------------------------------------------------------
@@ -1075,116 +1041,74 @@ function rate_month = transition_rate_monthly(X, from_state, to_state, h_months)
     rate_month = 1 - (1 - p_step)^(1/h_months);
 end
 
-% =================== Samplers (unchanged) ====================
+% =================== Partner sampler ====================
 function sampler = buildShadowPartnerSampler(a_grid, w_grid, S)
+% Draws potential partners from the marriage-market pool S (masses at grid
+% nodes for el, ec, hl, hc, ol, oc). Each node keeps exactly its own mass
+% and the draw is continuous within that node's cell (midpoints between
+% neighbouring nodes, half-cells at the grid edges), so no mass shifts
+% between nodes or off the grid edges. Employed partners get a continuous
+% ability and wage; unemployed and OLF partners a continuous ability.
     a = a_grid(:); w = w_grid(:);
     if ~issorted(a) || ~issorted(w), error('Grids must be strictly increasing.'); end
+    [aLo, aHi] = nodeCells(a);
+    [wLo, wHi] = nodeCells(w);
+    nA = numel(a);
 
-    c_hl = max(S.hl(:),0);  c_hc = max(S.hc(:),0);
-    c_ol = max(S.ol(:),0);  c_oc = max(S.oc(:),0);
-    samp_hl = buildInvSampler(a, c_hl);  samp_hc = buildInvSampler(a, c_hc);
-    samp_ol = buildInvSampler(a, c_ol);  samp_oc = buildInvSampler(a, c_oc);
-    mass_hl = sum(c_hl); mass_hc = sum(c_hc); mass_ol = sum(c_ol); mass_oc = sum(c_oc);
+    %         el           ec           hl              hc              ol              oc
+    comps = {max(S.el,0), max(S.ec,0), max(S.hl(:),0), max(S.hc(:),0), max(S.ol(:),0), max(S.oc(:),0)};
+    isEmp = [1 1 0 0 0 0];
+    isOlf = [0 0 0 0 1 1];
+    hasK  = [0 1 0 1 0 1];
 
-    EL = max(S.el,0); EC = max(S.ec,0);
-    [samp_el, mass_el] = build2DMixtureCellSampler(a, w, EL);
-    [samp_ec, mass_ec] = build2DMixtureCellSampler(a, w, EC);
-
-    comp_mass = [mass_el, mass_ec, mass_hl, mass_hc, mass_ol, mass_oc];
-    if all(comp_mass==0), error('Shadow distribution has zero mass.'); end
-    comp_p   = comp_mass / sum(comp_mass);
-    comp_cdf = cumsum(comp_p);
+    compMass = cellfun(@(x) sum(x(:)), comps);
+    if all(compMass==0), error('Shadow distribution has zero mass.'); end
+    compCdf = cumsum(compMass) / sum(compMass);
+    compCdf(end) = 1;
+    nodeCdf = cell(size(comps));
+    for jc = 1:numel(comps)
+        nodeCdf{jc} = cumsum(comps{jc}(:)) / max(compMass(jc), realmin);
+        nodeCdf{jc}(end) = 1;
+    end
 
     sampler = @draw_one;
     function p = draw_one(nDraw)
         if nargin<1, nDraw = 1; end
         p(nDraw,1) = struct('ability',[],'employed',[],'olf',[],'wage',[],'has_kids',[]);
-        for dd=1:nDraw
-            u = rand;
-            if u <= comp_cdf(1)
-                [a_draw, w_draw] = samp_el(1);
-                p(dd) = pack(a_draw, 1, 0, w_draw, 0);
-            elseif u <= comp_cdf(2)
-                [a_draw, w_draw] = samp_ec(1);
-                p(dd) = pack(a_draw, 1, 0, w_draw, 1);
-            elseif u <= comp_cdf(3)
-                a_draw = samp_hl(1);
-                p(dd) = pack(a_draw, 0, 0, 0, 0);
-            elseif u <= comp_cdf(4)
-                a_draw = samp_hc(1);
-                p(dd) = pack(a_draw, 0, 0, 0, 1);
-            elseif u <= comp_cdf(5)
-                try 
-                    a_draw = samp_ol(1);
-                catch
-                    a_draw = samp_hl(1);
-                end
-                p(dd) = pack(a_draw, 0, 1, 0, 0);
+        for dd = 1:nDraw
+            c = find(rand <= compCdf, 1);       % partner's labor/kid state
+            k = find(rand <= nodeCdf{c}, 1);    % grid node within that state
+            if isEmp(c)
+                ia = mod(k-1, nA) + 1;          % el/ec are (ability x wage)
+                iw = (k - ia)/nA + 1;
+                w_draw = wLo(iw) + rand*(wHi(iw) - wLo(iw));
             else
-                try
-                    a_draw = samp_oc(1);
-                catch
-                    a_draw = samp_hc(1);
-                end
-                p(dd) = pack(a_draw, 0, 1, 0, 1);
+                ia = k;
+                w_draw = 0;
             end
+            p(dd).ability  = aLo(ia) + rand*(aHi(ia) - aLo(ia));
+            p(dd).employed = isEmp(c);
+            p(dd).olf      = isOlf(c);
+            p(dd).wage     = w_draw;
+            p(dd).has_kids = hasK(c);
         end
     end
-
-    function s = pack(a_, emp_, olf_, w_, kid_)
-        s.ability = a_; s.employed = emp_; s.olf = olf_; s.wage = w_; s.has_kids = kid_;
-    end
 end
 
-function [sampler, total_mass] = build2DMixtureCellSampler(x, y, Z)
-    x = x(:); y = y(:);
-    [nX,nY] = size(Z);
-    if nX ~= numel(x) || nY ~= numel(y), error('build2DMixtureCellSampler: size mismatch.'); end
-    Z = max(Z,0);
-    dx = diff(x); dy = diff(y);
-    Zavg = 0.25*(Z(1:end-1,1:end-1)+Z(2:end,1:end-1)+Z(1:end-1,2:end)+Z(2:end,2:end));
-    Area = dx * dy.';
-    M = Zavg .* Area;
-    mass_vec = M(:);
-    total_mass = sum(mass_vec);
-    if total_mass <= 0
-        sampler = @(n) deal(nan(n,1), nan(n,1));
-        return;
-    end
-    pmf = mass_vec / total_mass;
-    cdf = cumsum(pmf);
-    nCx = numel(dx);
-    sampler = @draw2d;
-    function [xdraw, ydraw] = draw2d(nDraw)
-        if nargin<1, nDraw = 1; end
-        u = rand(nDraw,1);
-        k = discretize(u, [0; cdf]); k = max(k,1);
-        j = ceil(k / nCx);
-        i = k - (j-1)*nCx;
-        rx = rand(nDraw,1); ry = rand(nDraw,1);
-        xdraw = x(i) + rx.*dx(i);
-        ydraw = y(j) + ry.*dy(j);
-    end
+function [lo, hi] = nodeCells(x)
+% Cell of each grid node: from the midpoint with its left neighbour to the
+% midpoint with its right neighbour, truncated at the grid edges.
+    mid = (x(1:end-1) + x(2:end)) / 2;
+    lo  = [x(1); mid];
+    hi  = [mid;  x(end)];
 end
 
-function sampler = buildInvSampler(x_grid, mass, fallback_value)
-    if nargin < 3, fallback_value = NaN; end
-    x_grid = x_grid(:); mass = max(mass(:), 0);
-    if ~issorted(x_grid), error('buildInvSampler: x_grid must be sorted ascending.'); end
-    total = sum(mass);
-    if total <= 0
-        sampler = @(nDraw) repmat(fallback_value, max(1,nDraw), 1);
-        return;
-    end
-    pmf = mass / total;
-    cdf = cumsum(pmf); cdf(end) = 1;           % ensure exact 1
-    edges = [0; cdf(:)];
-    sampler = @sample_once;
-    function x = sample_once(nDraw)
-        if nargin < 1 || isempty(nDraw), nDraw = 1; end
-        u = rand(nDraw,1);
-        k = discretize(u, edges);
-        k(~isfinite(k) | k < 1) = 1;
-        x = x_grid(k);
-    end
+function a = draw_entry_ability(u, pg, param)
+% Newborn productivity from logN(aergmean, aergvar) truncated to
+% [a_min, a_max] (paper, Section 2.1), by inverse CDF on the uniforms u.
+% Consistent with the node masses pg.a.erg built in Param_F/Param_M.
+    s  = sqrt(pg.aergvar);
+    lo = logncdf(param.a.min, pg.aergmean, s);
+    hi = logncdf(param.a.max, pg.aergmean, s);
+    a  = logninv(lo + u.*(hi - lo), pg.aergmean, s);
 end

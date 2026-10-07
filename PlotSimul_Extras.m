@@ -29,7 +29,6 @@ fem   = logical(agentPanel.female(:));
 male  = ~fem;
 
 A  = agentPanel.ability;                       % N×T
-Wg = agentPanel.wage;                          % N×T (grid wage)
 E  = agentPanel.employed==1;
 O  = agentPanel.olf==1;
 U  = ~E & ~O;
@@ -38,8 +37,8 @@ M  = agentPanel.married==1;
 % partner states (robust)
 pE = agentPanel.partner_employed==1; pE(isnan(agentPanel.partner_employed)) = false;
 
-% real wages (only for employed)
-R = exp(A) .* Wg;    R(~E) = NaN;
+% real wages (only for employed); earnings include the child wage cut
+R = agentPanel.earnings;    R(~E) = NaN;
 
 % ability bins (like PlotSimul)
 Aall = A(:); Aall = Aall(isfinite(Aall));
@@ -100,7 +99,7 @@ end
 maskCoupleWE = M & E & pE & isfinite(R) & isfinite(agentPanel.partner_wage) & isfinite(agentPanel.partner_ability);
 if any(maskCoupleWE(:))
     % construct spouses' real wages
-    pR = exp(agentPanel.partner_ability).*agentPanel.partner_wage;
+    pR = agentPanel.partner_earnings;
     x = R(maskCoupleWE); y = pR(maskCoupleWE);
     % percentile ranks
     xr = tiedrank(x)/numel(x);
