@@ -735,10 +735,10 @@ else
     formatPlot('Age (years)','Average wage (w)','Wage vs age (employed only)');
     saveas(fig, fullfile(opts.outdir,'AgeProfile_Wage.png'));
 end
-%% ================= Figure: Value of Marrying an Average Productivity Person =================
-% Productivity grid on the x-axis (P = exp(a))
-Pgrid  = 0.5:0.5:4;                        % as in the paper
-agrid  = log(Pgrid);                       % ability points behind those productivities
+%% ================= Figure 1: Matching problem (childless agents) =================
+% Own productivity a on the x-axis, over the model's support [a_min, a_max]
+agrid  = linspace(param.a.min, param.a.max, 13);
+Pgrid  = agrid;
 
 % Convenience
 [N,T] = size(agentPanel.employed);
@@ -789,6 +789,7 @@ plot(Pgrid, V_pairWU_F, '-o', 'LineWidth',1.5, 'MarkerSize',5, 'DisplayName','Pa
 xlabel('Productivity'); ylabel('Value');
 title('Value of Marrying an Average Productivity Person — Female');
 legend('Location','best');
+saveas(gcf, fullfile(opts.outdir,'Fig1_MatchingValue_Female.png'));
 
 % ---------- (B) Male perspective: own ability varies, partner fixed at avg female ----------
 V_pairWW_M = zeros(numel(agrid),1);
@@ -808,6 +809,7 @@ plot(Pgrid, V_pairWU_M, '-o', 'LineWidth',1.5, 'MarkerSize',5, 'DisplayName','Pa
 xlabel('Productivity'); ylabel('Value');
 title('Value of Marrying an Average Productivity Person — Male');
 legend('Location','best');
+saveas(gcf, fullfile(opts.outdir,'Fig1_MatchingValue_Male.png'));
 
 %% =========== Additional Figure: Average respondent vs partner ability  ===========
 % Fix the respondent at their group average ability; vary the partner’s ability (productivity)
@@ -831,6 +833,7 @@ plot(Pgrid_p, V_pairWU_F_fix, '-o', 'LineWidth',1.5, 'MarkerSize',5, 'DisplayNam
 xlabel('Partner Productivity'); ylabel('Value');
 title('Average Female Respondent: Value vs Partner Ability');
 legend('Location','best');
+saveas(gcf, fullfile(opts.outdir,'Fig1_PartnerValue_Female.png'));
 
 % --- Male respondent fixed at a_bar_m; vary female partner ability
 V_pairWW_M_fix = zeros(numel(agrid_p),1);
@@ -849,6 +852,7 @@ plot(Pgrid_p, V_pairWU_M_fix, '-o', 'LineWidth',1.5, 'MarkerSize',5, 'DisplayNam
 xlabel('Partner Productivity'); ylabel('Value');
 title('Average Male Respondent: Value vs Partner Ability');
 legend('Location','best');
+saveas(gcf, fullfile(opts.outdir,'Fig1_PartnerValue_Male.png'));
 
 %% === ONE FIGURE: Unemployment marital gap (women vs men) ===
 % gap_* are in percentage points (S − M)

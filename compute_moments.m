@@ -69,8 +69,7 @@ pO     = agentPanel.partner_olf      == 1;
 pKnown = ~isnan(agentPanel.partner_employed) | ~isnan(agentPanel.partner_olf);
 pU     = (~pE & ~pO) & pKnown;
 
-% Realized wages / abilities (self & partner). Earnings come from the
-% simulation, which already applies the child wage cut (SimulatePanel.m).
+% Realized earnings theta_g w e^a (self & partner), from SimulatePanel.m
 A   = agentPanel.ability;
 W   = agentPanel.earnings;           % self
 pW  = agentPanel.partner_earnings;   % partner
@@ -465,15 +464,17 @@ else
 end
 
 %% ========== 7) Child cost by income bin (optional) ======================
-% If you have a function param.c(ability) returning the (annual) cost,
-% we scale by realized income y for households with kids.
+% Child cost kappa(a) as a share of household labor earnings, for
+% households with a child. Couples pay one cost at the spouses' average
+% productivity out of pooled earnings (paper, Section 2.1).
 if isfield(param,'c') && isa(param.c,'function_handle')
-    R_lin  = W(:);
-    K_vec  = KK(:);
-    A_all  = A(:);
-    valid  = isfinite(R_lin) & (R_lin>0) & K_vec;
-    y      = R_lin(valid);
-    a      = A_all(valid);
+    pWz    = pW;  pWz(~M | ~isfinite(pWz)) = 0;
+    Wz     = W;   Wz(~isfinite(Wz)) = 0;
+    Y_hh   = Wz + pWz;                                   % household earnings
+    A_hh   = A;   A_hh(M) = (A(M) + agentPanel.partner_ability(M))/2;
+    valid  = isfinite(Y_hh(:)) & (Y_hh(:)>0) & KK(:) & isfinite(A_hh(:));
+    y      = Y_hh(valid);
+    a      = A_hh(valid);
     cost_abs = param.c(a)./y;
     % Split by median income of valid obs
     med_inc = median(y, 'omitnan');

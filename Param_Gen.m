@@ -1,220 +1,181 @@
-function param = Param_Gen()
+function param = Param_Gen(policy)
 %==========================================================================
-% PARAM_GEN - Generate baseline model parameters
+% PARAM_GEN - Baseline parameters common to both genders
 %==========================================================================
-% This function initializes all baseline parameters for the joint search
-% model with endogenous marriage decisions.
+% Parameters of Morazzoni and Smirnov, "Labor and Family Dynamics in a
+% Joint-Search Framework" (Table 2), in the paper's notation. Time is in
+% months. Gender-specific parameters are set in Param_F.m and Param_M.m.
 %
-% Output:
-%   param - Structure containing all model parameters
+% Input (optional):
+%   policy - function handle param = policy(param) applied to the scalar
+%            parameters before the functions b(a), kappa(a), N(y), C_k(y)
+%            are built (see PolicyCounterfactuals.m). Changing a scalar
+%            after Param_Gen returns does NOT change those functions.
 %
-% Parameter Categories:
-%   - Preferences and demographics
-%   - Labor market parameters  
-%   - Marriage market parameters
-%   - Fiscal policy parameters
-%   - Numerical solution parameters
-%   - State space grid parameters
-%
-% Reference: Morazzoni, M. and Smirnov, D. (2025)
+% Units: wages, benefits, child costs and home production are monthly
+% flows in model consumption units (c.u.). The tax normalization
+% ybar = param.averagewage = 61 c.u. corresponds to $45,000 a year
+% ($25 an hour) in 2018 dollars: param.adjustW converts model wages to
+% $/hour and param.adjustWScale converts annual dollars to c.u.
 %==========================================================================
 
 %==========================================================================
 %% PREFERENCES AND DEMOGRAPHICS
 %==========================================================================
-
-% Time preference and risk aversion
-param.rho = 0.0034;%-log(1-0.05)/12;    % Monthly discount rate (paper Table 2)
-param.nu = 2.00;                   % Coefficient of relative risk aversion
-param.zeta = (1/40)/12;         % Monthly retirement probability (40-year careers)
-
-% Life-cycle and demographics
-param.T = 0;                    % Terminal condition parameter
+param.nu   = 2.00;              % gamma: coefficient of relative risk aversion
+param.rho  = 0.0034;            % rho: discount rate
+param.zeta = 1/480;             % xi: retirement rate (40-year working life)
 
 %==========================================================================
-%% LABOR MARKET PARAMETERS
+%% PRODUCTIVITY (paper eq. 1; common to both genders)
 %==========================================================================
+% employed:     da = phi_e  (abar  - a) dt + eps dB
+% not employed: da = phi_ne (a_min - a) dt + eps dB
+param.a.min = 0.00;             % a_min
+param.a.max = 3.00;             % a_max
+param.a.n   = 5;                % productivity grid points
 
-% Firm parameters
-param.F = 1;                    % Mass of vacant firms (normalized)
+param.phi_e    = 0.007;         % phi_e: productivity accumulation
+param.phi_ne   = 2*param.phi_e; % phi_ne: productivity depletion (twice phi_e)
+param.epsilon  = 0.065;         % eps: volatility of productivity shocks
+param.abar     = 1.25;          % abar: long-run mean productivity
 
-% Wage offer distribution (Pareto)
-param.w.min = 10;%1.5;              % Minimum wage offer
-param.w.max = 30;%4.0;              % Maximum wage offer
-param.w.n = 9;                  % Number of wage grid points
-ParetoFlat = 15;%5;  % Shape parameter (smaller = steeper dropoff)
-param.theta_w = 0.90;           % Gender wage-offer gap: women's offers are theta_w x men's (paper Table 2)
-
-% Productivity parameters
-param.a.min = 0.00;%0.75;             % Minimum productivity level
-param.a.max = 3.00;%3.5;              % Maximum productivity level  
-param.a.n = 5;                  % Number of productivity grid points
-
-% Unemployment benefits (home production)
-param.bmin = 15.85;%4.0;              % Minimum unemployment benefit
-param.bmax = 30.0;%9.00;              % Maximum unemployment benefit
-param.bscale = 1.05;%0.25;            % Benefit scaling parameter
-param.b = @(x) min(param.bmin + param.bscale.*exp(x), param.bmax);
-
-% Additional benefits by household type
-param.bc = 0;                   % Extra unemployment benefit if has children
-param.bm = 0;                   % Extra unemployment benefit if married
-param.bs = 0;                   % Extra unemployment benefit if single
-param.t = 0;                    % General transfer parameter
-
-% Out-of-labor-force benefits by household type
-param.oc = 0;%3.00;                % Extra OLF benefit if has children (= cmin)
-param.om = -1.80;%2.80;                % Extra OLF benefit if married
-param.os = +1.20;%1.70;                % Extra OLF benefit if single
+% Entry: a0 ~ logN(mu_a0, sigma_a0) truncated to [a_min, a_max]
+param.mu_a0    = 0;             % mu_a0: normalized to 0
+param.sigma_a0 = 0.365;         % sigma_a0: initial productivity dispersion
 
 %==========================================================================
-%% MARRIAGE MARKET PARAMETERS
+%% WAGE OFFERS
 %==========================================================================
-
-% Marriage process
-param.m = 0.375;%0.00375;              % Monthly marriage meeting intensity (paper Table 2)
-param.always_marry = false;     % Flag for forced marriages (debugging)
-param.tremble = 1e-1;         % Trembling hand parameter for marriage decisions
-
-% Fertility parameters
-param.pcp = 0.005;%0.005;              % Monthly probability of children for couples
-
-% Spousal complementarity
-param.l = @(af, am) -0.0.*abs(exp(af) - exp(am)).^1.0; % Utility from spousal match quality
+% Offers w ~ generalized Pareto (shape 0, scale sigma_w, location 0) on
+% [w_min, w_max]. Realized earnings omega = theta_g w e^a, theta_m = 1.
+param.w.min   = 10;             % w_min
+param.w.max   = 30;             % w_max
+param.w.n     = 9;              % wage grid points
+param.sigma_w = 10;             % sigma_w
+param.theta_w = 0.90;           % theta_w: gender wage-offer gap (women)
 
 %==========================================================================
-%% CHILD-RELATED PARAMETERS
+%% TAXES AND TRANSFERS
 %==========================================================================
+% N(y) = max{eta1 (y/ybar)^(1-eta2) ybar, 0.5 y}  (Heathcote et al., 2017)
+param.lambda_tax  = 0.906;      % eta1: scale
+param.tau_tax     = 0.181;      % eta2: progressivity
+param.averagewage = 61;         % ybar: income normalization (c.u.)
 
-% Child costs
-param.cscale = 0.35;%0.50;            % Child cost scaling parameter
-param.cmin = 7.0;%3.00;              % Minimum child cost
-param.c = @(x) min(param.cmin + param.cscale.*exp(x), +Inf); % Child cost function
-param.fkidwpenalty = 0.86;      % Female wage penalty with children
+param.adjustW      = param.averagewage/25;     % c.u. per $/hour
+param.adjustWScale = param.averagewage/45000;  % c.u. per annual $
 
-%==========================================================================
-%% FISCAL POLICY PARAMETERS
-%==========================================================================
+% Child-based tax credit C_k(y) (EITC; Garstenauer and Siassi, 2024)
+param.pi1_n0 = 0.0765;          % beta^Y1_0: phase-in rate, no child
+param.pi1_n1 = 0.34;            % beta^Y1_1: phase-in rate, child
+param.pi2_n0 = 0.0765;          % beta^Y2_0: phase-out rate, no child
+param.pi2_n1 = 0.1598;          % beta^Y2_1: phase-out rate, child
+param.E1_n0  = 6750  * param.adjustWScale;   % y^Y1_0: end of phase-in, no child
+param.E1_n1  = 10150 * param.adjustWScale;   % y^Y1_1: end of phase-in, child
+param.E2_n0  = 14200 * param.adjustWScale;   % y^Y2_0: start of phase-out, no child
+param.E2_n1  = 24350 * param.adjustWScale;   % y^Y2_1: start of phase-out, child
+% The credit is zero from y = E2 + pi1*E1/pi2 on: $20,950 (no child) and
+% about $46,000 (child), the EITC eligibility caps.
 
-% Tax system parameters
-param.lambda_tax = 0.906;%0.906;       % Tax progressivity parameter
-param.tau_tax = 0.18;          % Tax curvature parameter
-param.averagewage = 61;         % Average wage for tax calculations
-
-% Tax function: progressive tax schedule
-param.tax = @(x, param) max((param.lambda_tax .* ...
-    ((x./param.averagewage).^(1-param.tau_tax)) .* param.averagewage), 0.5.*x);
-
-% Tax credits parameters
-param.pi1_n0 = 7.65/100;        % Tax credit rate (no children, low income)
-param.pi1_n1 = 34/100;          % Tax credit rate (with children, low income)
-param.pi2_n0 = 7.65/100;        % Tax credit rate (no children, high income)
-param.pi2_n1 = 15.98/100;       % Tax credit rate (with children, high income)
-
-% Tax credit thresholds
-param.adjustW      = param.averagewage/25;% wage rescaling
-% param.adjustH      = 40/param.adjustW;          % hours rescaling
-% param.E1_n0 = (6750/(48*40*param.adjustH));  % Lower income threshold (no children)
-% param.E1_n1 = (10150/(48*40*param.adjustH)); % Lower income threshold (with children)
-% param.E2_n0 = (14250/(48*40*param.adjustH)); % Upper income threshold (no children)
-% param.E2_n1 = (24350/(48*40*param.adjustH)); % Upper income threshold (with children)
-% param.E3_n0 = (20950/(48*40*param.adjustH)); % Max income threshold (no children)
-% param.E3_n1 = (46010/(48*40*param.adjustH)); % Max income threshold (with children)
-param.adjustWScale = param.averagewage/45000;
-param.E1_n0 = (6750*param.adjustWScale);  % Lower income threshold (no children)
-param.E1_n1 = (10150*param.adjustWScale); % Lower income threshold (with children)
-param.E2_n0 = (14200*param.adjustWScale); % Upper income threshold (no children)
-param.E2_n1 = (24350*param.adjustWScale); % Upper income threshold (with children)
-param.E3_n0 = (20950*param.adjustWScale); % Max income threshold (no children)
-param.E3_n1 = (46010*param.adjustWScale); % Max income threshold (with children)
-
-
-% Tax rebate functions
-param.tax_rebait_kid = @(x, param) tax_rebait_kid(x, param);
-param.tax_rebait_nokid = @(x, param) tax_rebait_nokid(x, param);
-
-% Disposable income functions
-param.nokid_tax = @(x, a, param) param.tax(x, param) + param.tax_rebait_nokid(x, param);
-param.onekid_tax = @(x, a, param) param.tax(x, param) + param.tax_rebait_kid(x, param);  
-param.no_tax = @(x, a, param) x;  % No tax function (for comparison)
+% Unemployment benefits b(a) = min{bmin + bscale e^a, bmax}
+param.bmin   = 15.85;           % b_min (c.u.)
+param.bscale = 0.85;            % b_scale
+param.bmax   = 0.5*param.averagewage;   % b_max: 50% of the average wage
 
 %==========================================================================
-%% EMPIRICAL TARGETS FOR CALIBRATION
+%% MARRIAGE AND FERTILITY
 %==========================================================================
+param.m   = 0.375;              % mu: marriage meeting rate
+param.pcs = 0.0004;             % pi^s: fertility rate, singles
+param.pcp = 0.005;              % pi^c: fertility rate, couples
 
-% Marriage and demographics
-param.moment.mfrac = 0.61047;       % Target fraction of married individuals
-param.moment.unemp_f = 0.055695;    % Target female unemployment rate
-param.moment.unemp_m = 0.055695;    % Target male unemployment rate
+% Child cost kappa(a) = kappa_min + kappa_scale e^a; couples pay one cost
+% at the spouses' average productivity
+param.cmin   = 7.0;             % kappa_min (c.u.)
+param.cscale = 0.35;            % kappa_scale
 
-% Labor market dynamics
-param.moment.tenure = 1.5;          % Target average job tenure
-param.moment.w5010 = 5;             % Target 50th/10th wage percentile ratio
-param.moment.w5010entr = 3;         % Target entry wage dispersion
-param.moment.dwvar = 0.5;           % Target wage change variance
+% Forced marriage at a meeting (no value comparison); true only in the
+% exogenous-marriage counterfactual (SimulatePanelCounter.m)
+param.always_marry = false;
 
 %==========================================================================
 %% NUMERICAL SOLUTION PARAMETERS
 %==========================================================================
+% Trembling hand in the couples' switching decisions (paper Appendix B.2)
+param.tremble = 1e-1;
 
 % Value function iteration
-param.updMult = 0.15;               % Update speed for value functions (conservative)
-param.updMult_s = 0.15;             % Update speed for single agent distributions
-param.updMult_d = 0.5;              % Update speed for couple distributions
-param.updMultf = 0.5;               % Update speed for flows between states
-param.updMultLCP = 0.85;            % Update speed for linear complementarity problems
+param.updMult   = 0.15;         % update weight, value functions
+param.updMult_s = 0.15;         % update weight, single-agent distributions
+param.updMult_d = 0.5;          % update weight, couple distributions
 
-% Convergence criteria
-param.maxiter = 100;                % Maximum iterations for outer loops
-param.crit = 1e-4;                  % General convergence criterion
-param.critC = 1e-6;                 % Strict convergence criterion
-param.Delta = 100;                  % Time step parameter
+% Convergence
+param.maxiter = 100;            % maximum outer iterations
+param.crit    = 1e-4;           % general convergence criterion
+param.critC   = 1e-6;           % strict convergence criterion
 
-% Grid refinement
-param.Sdimmult = 1;                 % Grid refinement multiplier for single agents
-param.minValue = 1e-5;              % Minimum value function threshold
+% Grid refinement for single agents
+param.Sdimmult = 1;
+param.minValue = 1e-5;          % consumption floor in util.m
 
 %==========================================================================
-%% WAGE OFFER DISTRIBUTION SETUP
+%% POLICY CHANGES (optional)
 %==========================================================================
+if nargin > 0 && ~isempty(policy)
+    param = policy(param);
+end
 
-% Construct wage grid for baseline problem
+%==========================================================================
+%% FUNCTIONS OF THE PARAMETERS (built after any policy change)
+%==========================================================================
+param.b = @(x) min(param.bmin + param.bscale.*exp(x), param.bmax);   % b(a)
+param.c = @(x) param.cmin + param.cscale.*exp(x);                    % kappa(a)
+
+% N(y): income after taxes, before credits
+param.tax = @(x, param) max((param.lambda_tax .* ...
+    ((x./param.averagewage).^(1-param.tau_tax)) .* param.averagewage), 0.5.*x);
+
+% C_k(y): child-based tax credits
+param.tax_rebait_kid   = @(x, param) tax_rebait_kid(x, param);
+param.tax_rebait_nokid = @(x, param) tax_rebait_nokid(x, param);
+
+% D_k(y) = N(y) + C_k(y): disposable resources (a is unused)
+param.nokid_tax  = @(x, a, param) param.tax(x, param) + param.tax_rebait_nokid(x, param);
+param.onekid_tax = @(x, a, param) param.tax(x, param) + param.tax_rebait_kid(x, param);
+
+%==========================================================================
+%% WAGE OFFER DISTRIBUTION
+%==========================================================================
+% Probability of each wage grid node (men's offers; women's grid is the
+% same distribution scaled by theta_w, see BuildSingleGrid/BuildDoubleGrid)
 wvec = linspace(param.w.min, param.w.max, param.w.n);
-dw = (param.w.max - param.w.min)/(param.w.n - 1);
+dw   = (param.w.max - param.w.min)/(param.w.n - 1);
+param.f = gppdf(wvec, 0, param.sigma_w, 0) .* dw;
+param.f = param.f ./ sum(param.f);
 
-% Pareto distribution for wage offers
-param.f = gppdf(wvec, 0, ParetoFlat, 0);  % Generalized Pareto PDF
-param.f = param.f .* dw;                  % Adjust for grid spacing
-param.f(end) = param.f(end);             % Ensure proper tail behavior
-param.f = param.f./sum(param.f);
-
-% Extended wage grid for refined single agent problems
+% Same on the (optionally refined) single-agent wage grid
 wvec_long = linspace(param.w.min, param.w.max, (param.w.n-1)*param.Sdimmult+1);
-dw_long = (param.w.max - param.w.min)/((param.w.n-1)*param.Sdimmult);
-param.f_long = gppdf(wvec_long, 0, ParetoFlat, 0);
-param.f_long = param.f_long .* dw_long;
-param.f_long = param.f_long ./ sum(param.f_long) .* sum(param.f);
-param.f_long(end) = param.f_long(end);
-param.f_long = param.f_long./sum(param.f_long);
+dw_long   = (param.w.max - param.w.min)/((param.w.n-1)*param.Sdimmult);
+param.f_long = gppdf(wvec_long, 0, param.sigma_w, 0) .* dw_long;
+param.f_long = param.f_long ./ sum(param.f_long);
+
+end
 
 %==========================================================================
-%% NESTED FUNCTIONS FOR TAX REBATES
+%% CHILD-BASED TAX CREDITS C_k(y)
 %==========================================================================
 
 function rebait = tax_rebait_nokid(x, param)
-    % Tax rebate schedule for households without children
+    % Households without children (k = 0)
     rebait = param.pi1_n0 .* x .* (x < param.E1_n0) + ...
              param.pi1_n0 .* param.E1_n0 .* (x >= param.E1_n0) .* (x < param.E2_n0) + ...
-             max(0, param.pi1_n0 .* param.E1_n0 - param.pi2_n0 .* (x - param.E2_n0)) .* (x >= param.E2_n0)+...
-             0.*(x>=param.E3_n0);
+             max(0, param.pi1_n0 .* param.E1_n0 - param.pi2_n0 .* (x - param.E2_n0)) .* (x >= param.E2_n0);
 end
 
 function rebait = tax_rebait_kid(x, param)
-    % Tax rebate schedule for households with children  
+    % Households with a child (k = 1)
     rebait = param.pi1_n1 .* x .* (x < param.E1_n1) + ...
              param.pi1_n1 .* param.E1_n1 .* (x >= param.E1_n1) .* (x < param.E2_n1) + ...
-             max(0, param.pi1_n1 .* param.E1_n1 - param.pi2_n1 .* (x - param.E2_n1)) .* (x >= param.E2_n1)+...
-             0.*(x>=param.E3_n1);
-end
-
+             max(0, param.pi1_n1 .* param.E1_n1 - param.pi2_n1 .* (x - param.E2_n1)) .* (x >= param.E2_n1);
 end

@@ -30,11 +30,11 @@ function solutionS = SolveSingleProblem(param, pg, gridS)
     % ---------- initial guesses ----------
     solutionS.JlValue = util(param, param.nokid_tax(W_eff, AA, param));
     solutionS.UlValue = util(param, param.nokid_tax(param.b(gridS.a.a), gridS.a.a, param));
-    solutionS.OlValue = util(param, param.no_tax(  pg.bout(gridS.a.a),  gridS.a.a, param));
+    solutionS.OlValue = util(param, pg.hs0 .* ones(gridS.a.n,1));
 
     solutionS.JcValue = util(param, param.onekid_tax(W_eff, AA, param) - repmat(c_a,1,gridS.w.n));
     solutionS.UcValue = util(param, param.onekid_tax(param.b(gridS.a.a), gridS.a.a, param) - c_a);
-    solutionS.OcValue = util(param, param.no_tax(  pg.boutc(gridS.a.a),  gridS.a.a, param) - c_a);
+    solutionS.OcValue = util(param, pg.hs1 - c_a);
 
     % ---------- iterate on values ----------
     % diff = Inf;
@@ -67,11 +67,11 @@ function solutionS = SolveSingleProblem(param, pg, gridS)
     nVar = size(Aall,1);
     rhs  = zeros(nVar+1,1);
 
-    % Newborns replace retirees at rate zeta and enter single, out of the
-    % labor force and without kids (paper, Section 2.1): inflow into Ol rows.
-    ol_lo = 2*pg.NSall + 1;               % Ol block follows [Jl; Ul; Jc; Uc]
-    ol_hi = 2*pg.NSall + gridS.a.n;
-    rhs(ol_lo:ol_hi) = rhs(ol_lo:ol_hi) - param.zeta * pg.a.erg(:);
+    % Newborns replace retirees at rate zeta and enter single, unemployed
+    % and without kids (paper, Section 2.1): inflow into Ul rows.
+    ul_lo = pg.NS + 1;                    % Ul block follows Jl (size pg.NS)
+    ul_hi = pg.NS + gridS.a.n;
+    rhs(ul_lo:ul_hi) = rhs(ul_lo:ul_hi) - param.zeta * pg.a.erg(:);
 
     % normalization row
     Msys     = [Aall.'; ones(1,nVar)];
@@ -106,16 +106,6 @@ function solutionS = SolveSingleProblem(param, pg, gridS)
                     t = min(pg.lambda_o, tremble * exp(S.OlValue(ai) - S.JlValue(ai,ri)));
                     AJ_J(i,i)  = AJ_J(i,i)  - t;
                     AJ_O(i,ai) = AJ_O(i,ai) + t;
-                end
-
-                % accept better offers J -> J'
-                for r2 = 1:gridS.w.n
-                    if S.JlValue(ai,ri) + tol < S.JlValue(ai,r2)
-                        w  = pg.lambda * param.f_long(r2);
-                        i2 = (r2-1)*gridS.a.n + ai;
-                        AJ_J(i,i)  = AJ_J(i,i)  - w;
-                        AJ_J(i,i2) = AJ_J(i,i2) + w;
-                    end
                 end
             end
         end
@@ -191,14 +181,6 @@ function solutionS = SolveSingleProblem(param, pg, gridS)
                     AJ_J(i,i)  = AJ_J(i,i)  - t;
                     AJ_O(i,ai) = AJ_O(i,ai) + t;
                 end
-                for r2 = 1:gridS.w.n
-                    if S.JcValue(ai,ri) + tol < S.JcValue(ai,r2)
-                        w  = pg.lambda * param.f_long(r2);
-                        i2 = (r2-1)*gridS.a.n + ai;
-                        AJ_J(i,i)  = AJ_J(i,i)  - w;
-                        AJ_J(i,i2) = AJ_J(i,i2) + w;
-                    end
-                end
             end
         end
         AJ_J = sparse(AJ_J);
@@ -253,31 +235,31 @@ function solutionS = SolveSingleProblem(param, pg, gridS)
         end
     end
 
-    % ---------- instantaneous utilities (explicit broadcasting) ----------
+    % ---------- instantaneous utilities (paper, Section 2.1) ----------
+    % c(W,k) = D_k(w e^a) - k kappa(a),  c(U,k) = D_k(b(a)) - k kappa(a),
+    % c(O,k) = h^s_{g,k} - k kappa(a)  (home production is not taxed)
     function u = instUtilityOl
-        cons = param.no_tax(pg.bout(gridS.a.a), gridS.a.a, param)+param.os;
-        u    = util(param, cons) .* ones(gridS.a.n,1);
+        cons = pg.hs0 .* ones(gridS.a.n,1);
+        u    = util(param, cons);
     end
     function u = instUtilityUl
-        cons = param.nokid_tax(param.b(gridS.a.a), gridS.a.a, param)+param.bs;
+        cons = param.nokid_tax(param.b(gridS.a.a), gridS.a.a, param);
         u    = util(param, cons) .* ones(gridS.a.n,1);
     end
     function u = instUtilityJl
-        cons = param.nokid_tax(W_eff, AA, param)+param.t;
+        cons = param.nokid_tax(W_eff, AA, param);
         u    = util(param, cons);
     end
     function u = instUtilityOc
-        cons = param.no_tax(pg.boutc(gridS.a.a), gridS.a.a, param) - c_a +param.os+param.oc;
+        cons = pg.hs1 - c_a;
         u    = util(param, cons) .* ones(gridS.a.n,1);
     end
     function u = instUtilityUc
-        cons = param.onekid_tax(param.b(gridS.a.a), gridS.a.a, param) - c_a +param.bs+param.bc;
+        cons = param.onekid_tax(param.b(gridS.a.a), gridS.a.a, param) - c_a;
         u    = util(param, cons) .* ones(gridS.a.n,1);
     end
     function u = instUtilityJc
-        % Single parents earn fkidwpenalty x the wage, regardless of gender
-        % (cut applied to gross earnings, as in SolveEndogProblem.m)
-        cons = param.onekid_tax(W_eff.*param.fkidwpenalty, AA, param) - repmat(c_a,1,gridS.w.n) +param.t;
+        cons = param.onekid_tax(W_eff, AA, param) - repmat(c_a,1,gridS.w.n);
         u    = util(param, cons);
     end
 

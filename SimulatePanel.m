@@ -107,10 +107,10 @@ iF = female; iM = ~female;
 a0(iF) = draw_entry_ability(U_entry(iF,1), param.pf, param);
 a0(iM) = draw_entry_ability(U_entry(iM,1), param.pm, param);
 
-% t=1 initialization: born single, out of the labor force, no kids (paper, Section 2.1)
+% t=1 initialization: born single, unemployed, no kids (paper, Section 2.1)
 ability(:,1) = a0;
 employed(:,1) = 0;
-olf(:,1)      = 1;
+olf(:,1)      = 0;
 married(:,1)  = 0;
 has_kids(:,1) = 0;
 wage(:,1)     = 0;
@@ -118,12 +118,12 @@ age(:,1)        = 0;        % tenure since (re)birth
 age_chron_full(:,1) = age0_m; % chronological age at entry (e.g., 25y)
 newborn(:,1)    = 1;
 
-% Initial value function (OLF, no kids)
+% Initial value function (unemployed, no kids)
 for i = 1:N
     if female(i)
-        value_now(i,1) = valueFunc.single_female.olf_nokid(ability(i,1));
+        value_now(i,1) = valueFunc.single_female.unemployed_nokid(ability(i,1));
     else
-        value_now(i,1) = valueFunc.single_male.olf_nokid(ability(i,1));
+        value_now(i,1) = valueFunc.single_male.unemployed_nokid(ability(i,1));
     end
 end
 
@@ -353,17 +353,17 @@ parfor i = 1:N
 
         % ---- Attrition (death) ----
         if (u_die > exp(-param.zeta * h))
-            % reset to newborn: single, out of the labor force, no kids
+            % reset to newborn: single, unemployed, no kids
             ag(t) = 0; nb(t) = 1; agc(t) = age0_m;
-            m(t) = 0; e(t) = 0; o(t) = 1;
+            m(t) = 0; e(t) = 0; o(t) = 0;
             w(t) = 0; k(t) = 0;
             pa(t)=NaN; pe(t)=NaN; po(t)=NaN; pw(t)=NaN; mo(t)=0; jo(t)=0;
             if isF
                 a(t) = draw_entry_ability(U_entry(i,t), param.pf, param);
-                value_now_i = valueFunc.single_female.olf_nokid(a(t));
+                value_now_i = valueFunc.single_female.unemployed_nokid(a(t));
             else
                 a(t) = draw_entry_ability(U_entry(i,t), param.pm, param);
-                value_now_i = valueFunc.single_male.olf_nokid(a(t));
+                value_now_i = valueFunc.single_male.unemployed_nokid(a(t));
             end
             V(t) = value_now_i;
         end
@@ -450,16 +450,10 @@ newborn          = newborn(:, cols);
 % If you don't track divorces explicitly, keep zeros with correct size:
 divorce          = zeros(N, numel(cols));
 
-% Realized earnings = wage offer x exp(ability), with the child wage cut
-% (param.fkidwpenalty) applied as in the value functions: to single parents
-% of either gender, and to the woman in a couple with a child. The state
-% variable `wage` stays the uncut offer, since value functions are indexed
-% by it.
-kidCut           = 1 - param.fkidwpenalty;
-selfCut          = (has_kids==1) & ((married==0) | female);
-partnerCut       = (has_kids==1) & (married==1) & ~female;   % partner is the woman
-earnings         = exp(ability)         .* wage         .* (1 - kidCut.*selfCut);
-partner_earnings = exp(partner_ability) .* partner_wage .* (1 - kidCut.*partnerCut);
+% Realized earnings omega = theta_g w e^a (paper Section 2.2); the wage state
+% already includes theta_g (women's offer grid is scaled by theta_w).
+earnings         = exp(ability)         .* wage;
+partner_earnings = exp(partner_ability) .* partner_wage;
 
 % ====================== ASSEMBLE agentPanel ======================
 agentPanel = struct();
@@ -1090,10 +1084,10 @@ function [lo, hi] = nodeCells(x)
 end
 
 function a = draw_entry_ability(u, pg, param)
-% Newborn productivity from logN(aergmean, aergvar) truncated to
+% Newborn productivity from logN(mu_a0, sigma_a0) truncated to
 % [a_min, a_max] (paper, Section 2.1), by inverse CDF on the uniforms u.
 % Consistent with the node masses pg.a.erg built in Param_F/Param_M.
-    s  = sqrt(pg.aergvar);
+    s  = pg.aergsd;
     lo = logncdf(param.a.min, pg.aergmean, s);
     hi = logncdf(param.a.max, pg.aergmean, s);
     a  = logninv(lo + u.*(hi - lo), pg.aergmean, s);
