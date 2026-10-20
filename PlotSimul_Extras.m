@@ -37,7 +37,7 @@ M  = agentPanel.married==1;
 % partner states (robust)
 pE = agentPanel.partner_employed==1; pE(isnan(agentPanel.partner_employed)) = false;
 
-% real wages (only for employed); earnings include the child wage cut
+% realized earnings theta_g w e^a (only for employed)
 R = agentPanel.earnings;    R(~E) = NaN;
 
 % ability bins (like PlotSimul)
