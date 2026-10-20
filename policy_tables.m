@@ -31,7 +31,7 @@ for p = 1:size(policies,1)
 
     % Wages and unemployment rates by group (endogenous marriage)
     fprintf('%-20s', '');
-    fprintf('%14s', groups{:,2}); fprintf('\n');
+    fprintf('%12s', 'Singles', 'Married', 'Women', 'Men', 'With child', 'No child'); fprintf('\n');
     wg = zeros(1,size(groups,1)); un = wg;
     for g = 1:size(groups,1)
         wg(g) = pc(pol.moments_endog.stats_wages.(groups{g,1}), base.moments_endog.stats_wages.(groups{g,1}));
@@ -39,8 +39,8 @@ for p = 1:size(policies,1)
         rows(end+1,:) = {policies{p,1}, 'Wage (%)', groups{g,2}, wg(g)};               %#ok<AGROW>
         rows(end+1,:) = {policies{p,1}, 'Unemployment rate (%)', groups{g,2}, un(g)};  %#ok<AGROW>
     end
-    fprintf('%-20s', 'Wage'); fprintf('%+13.2f%%', wg); fprintf('\n');
-    fprintf('%-20s', 'Unemployment rate'); fprintf('%+13.2f%%', un); fprintf('\n\n');
+    fprintf('%-20s', 'Wage'); fprintf('%+11.2f%%', wg); fprintf('\n');
+    fprintf('%-20s', 'Unemployment rate'); fprintf('%+11.2f%%', un); fprintf('\n\n');
 
     % Marriage rates, welfare and fiscal expenditure
     mr = pc(pol.moments_endog.married.all, base.moments_endog.married.all);
