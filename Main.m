@@ -77,7 +77,6 @@ param.critC = 1e-6;            % Convergence criterion for marriage market
 param.updMult = 0.75;           % Update multiplier for value functions
 param.updMult_s = 0.5;%0.95;        % Update multiplier for single agent distributions
 param.updMult_d = 0.75;%1.0;         % Update multiplier for couple distributions  
-param.updMultf = 0.75;          % Update multiplier for flows
 param.maxiter = 200;           % Maximum iterations for marriage equilibrium
 
 % Option to load previous solution (set to false for clean run)
@@ -133,10 +132,18 @@ display_untargeted_moments(moments_stats, param);
 % also saved to calibration_table.csv
 calibration_table(moments_stats, param);
 
-% Generate plots and figures
+% Save the simulated panel and moments
+save('simulation.mat', 'agentPanel', 'moments_stats', 'simParam', '-v7.3');
+
+% Paper figures, saved in Plots/ by PlotSimul:
+%   Figure 1 - Fig1_MatchingValue_{Female,Male}.png, Fig1_PartnerValue_{Female,Male}.png
+%   Figure 5 - EndogWageDiff_FvM.png, EndogUnemploymentDiff_FvM.png
+%   Figure 6 - WageChangeAfterUnemployment_S_vs_M.png, WageChangeAfterUnemployment_Kids.png
+%   Figure 7 - EndogMarriedShare.png, EndogProductivities.png
+%   Figure 8 - HeatmapAbilitiesMarried.png
+% PlotSimul_Extras(agentPanel, param) adds diagnostic figures (PlotsExtras/).
 fprintf('   - Generating plots and figures...\n');
-% PlotSimul(agentPanel, param, valueFunc);
-% PlotSimul_Extras(agentPanel, param);  
+PlotSimul(agentPanel, param, valueFunc);
 
 fprintf('\n==========================================================================\n');
 fprintf('Model solution completed successfully!\n');
@@ -152,7 +159,7 @@ function display_targeted_moments(moments_stats,param)
     fprintf('--------------------------------------\n');
     
     % Marriage and demographics
-    fprintf('Married share of population:           %6.2f%%  (target: 50%%)\n', ...
+    fprintf('Married share of population:           %6.2f%%  (target: 52%%)\n', ...
             100*moments_stats.married.all);
     
     fprintf('\n');
@@ -168,7 +175,7 @@ function display_targeted_moments(moments_stats,param)
             100*moments_stats.transitions.male.EU);
     fprintf('OE transition rate - Female:           %6.2f%%  (target: 4.0%%)\n', ...
             100*moments_stats.transitions.female.OE);
-    fprintf('OE transition rate - Male:             %6.2f%%  (target: 5.3%%)\n', ...
+    fprintf('OE transition rate - Male:             %6.2f%%  (target: 5.2%%)\n', ...
             100*moments_stats.transitions.male.OE);
     
     fprintf('\n');

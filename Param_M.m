@@ -1,85 +1,68 @@
 function [param, gridSm] = Param_M(param)
 %==========================================================================
-% PARAM_M - Generate parameters specific to male single agents
+% PARAM_M - Parameters specific to male agents
 %==========================================================================
-% This function sets parameters specific to male agents and builds
-% the corresponding state space grids.
+% Sets the gender-specific parameters of the paper (Table 2) and builds
+% the male single-agent grids.
 %
 % Inputs:
-%   param - Base parameter structure from Param_Gen()
+%   param  - Base parameter structure from Param_Gen()
 %
 % Outputs:
-%   param  - Parameter structure with added male-specific parameters (param.pm)
+%   param  - Parameter structure with param.pm added
 %   gridSm - State space grids for male single agents
 %
-% Male-specific features:
-%   - Higher average productivity levels
-%   - Lower job separation rate than females (paper Table 2)
-%   - Different search intensities by employment status
-%   - Lower out-of-labor-force benefits (reflecting lower childcare responsibilities)
-%   - Gender-specific fertility rates
+% Gender-specific (paper Table 2): wage-offer wedge theta_g, job separation
+% delta_g, job arrival rates lambda_g (unemployed) and nu_g (out of the
+% labor force), home production h^s_{g,k} and h^c_{g,k}. Productivity,
+% entry and fertility parameters are common to both genders (Param_Gen).
 %
-% Reference: Morazzoni, M. and Smirnov, D. (2025)
+% Reference: Morazzoni, M. and Smirnov, D., "Labor and Family Dynamics in
+% a Joint-Search Framework"
 %==========================================================================
 
 %==========================================================================
-%% PRODUCTIVITY PARAMETERS
+%% PRODUCTIVITY AND ENTRY (common to both genders, set in Param_Gen)
 %==========================================================================
 
-% Productivity process parameters
-pm.a_sigma = 0.055;%0.085;             % Standard deviation of productivity shocks
-pm.mu = 0.0095;%0.007;                  % Productivity drift intensity when employed  
-pm.mu_u = pm.mu * 2.0;%pm.mu * 2.5;          % Productivity drift intensity when unemployed (faster depreciation)
-pm.amean = 1.350;%3.0 * 0.90;          % Mean productivity level (higher than females)
-
-% Entry-level productivity distribution
-pm.aergmean = 0.0;%1.00;             % Mean of entry productivity (log scale)
-pm.aergvar = 0.805;%0.205;              % Variance of entry productivity (log scale)
+pm.mu       = param.phi_e;      % employed: da = phi_e (abar - a) dt + eps dB
+pm.mu_u     = param.phi_ne;     % not employed: da = phi_ne (a_min - a) dt + eps dB
+pm.a_sigma  = param.epsilon;    % volatility of productivity shocks
+pm.amean    = param.abar;       % long-run mean productivity when employed
+pm.aergmean = param.mu_a0;      % entry: a0 ~ logN(mu_a0, sigma_a0), truncated
+pm.aergsd   = param.sigma_a0;
+pm.pcs      = param.pcs;        % fertility rate as a single (pi^s)
 
 %==========================================================================
 %% LABOR MARKET PARAMETERS
 %==========================================================================
 
-% Wage offers: men draw the unscaled offer distribution
+% Wage offers: theta_g = 1 for men (paper Section 2.2)
 pm.wscale = 1;
 
-% Job destruction and search
-pm.delta = 0.012;              % Monthly job separation rate (paper Table 2: lower than females)
+% Job separation (delta_g)
+pm.delta = 0.012;
 
-% Search intensity by employment status
-pm.lambda = 0;                  % Search intensity when employed (on-the-job search)
-pm.lambda_u = 0.55;               % Search intensity when unemployed (paper Table 2: higher than females)
-pm.lambda_o = 50;              % Search intensity when out of labor force
-pm.lambda_oE = 0.095;            % OLF job arrival rate (paper Table 2)
-
-%==========================================================================
-%% OUT-OF-LABOR-FORCE BENEFITS
-%==========================================================================
-% These parameters reflect that males typically have lower childcare
-% responsibilities, resulting in lower OLF benefits overall
-
-pm.boutmin = param.bmin*1.385;
-pm.boutmax = param.bmin*2;
-pm.outscale=0.10;
-pm.bout = @(x) min(pm.boutmin + pm.outscale.*exp(x), pm.boutmax);%2.30;                
-pm.boutminc = pm.boutmin - 0.60;%1.0;      
-pm.boutc = @(x) min(pm.boutminc + pm.outscale.*exp(x), pm.boutmax);%2.30;                
-
-% pm.bout = param.bmin+6.0;%2.30;                
-% pm.boutc = pm.bout + 1.0;%1.0;      
+% Job arrival rates
+pm.lambda_u  = 0.55;          % unemployed (lambda_g)
+pm.lambda_oE = 0.095;         % out of the labor force (nu_g), direct O -> W
+pm.lambda_o  = 50;            % switching intensity into/out of the labor force
+                                % (numerical device, paper Appendix B.2)
 
 %==========================================================================
-%% FERTILITY PARAMETERS
+%% HOME PRODUCTION (out of the labor force; paper Table 2, c.u.)
 %==========================================================================
+% Not taxable. Constant by marital status and parenthood.
 
-% Fertility rates for single males
-pm.pcs = 0.0004;%0.0004;                % Monthly probability of having children (single males)
+pm.hs0 = 23.20;                  % single, no child  (h^s_{g,k=0})
+pm.hs1 = 22.50;                  % single, child     (h^s_{g,k=1})
+pm.hc0 = 20.05;                  % married, no child (h^c_{g,k=0})
+pm.hc1 = 19.35;                  % married, child    (h^c_{g,k=1})
 
 %==========================================================================
 %% BUILD MALE SINGLE AGENT GRIDS
 %==========================================================================
 
-% Build state space grids using the single grid builder
 [gridSm, pm] = BuildSingleGrid(param, pm);
 
 %==========================================================================
@@ -91,14 +74,13 @@ pm.pcs = 0.0004;%0.0004;                % Monthly probability of having children
 % (midpoints between nodes, half-cells at the edges), renormalized for the
 % truncation. SimulatePanel draws a0 from the same truncated distribution.
 edgesA   = [gridSm.a.min; (gridSm.a.a(1:end-1) + gridSm.a.a(2:end))/2; gridSm.a.max];
-pm.a.erg = diff(logncdf(edgesA, pm.aergmean, sqrt(pm.aergvar)));
+pm.a.erg = diff(logncdf(edgesA, pm.aergmean, pm.aergsd));
 pm.a.erg = pm.a.erg ./ sum(pm.a.erg);
 
 %==========================================================================
 %% STORE IN PARAMETER STRUCTURE
 %==========================================================================
 
-% Add all male parameters to the main parameter structure
 param.pm = pm;
 
 end
