@@ -14,7 +14,7 @@ without it the simulation runs serially).
 | Script | What it does | Paper output |
 |---|---|---|
 | `Main.m` | Solves the baseline model, simulates a panel of households, computes moments, prints them next to the data targets and draws the figures | Tables 3, 4, 5 (model with endogenous marriage), 6; Figures 1, 5, 6, 7, 8 |
-| `PolicyCounterfactuals.m` | Solves and simulates the baseline and the two policies, with and without endogenous marriage (about 6 times the run time of `Main.m`) | Table 5 (model without endogenous marriage), Tables 7–10 |
+| `PolicyCounterfactuals.m` | Solves and simulates the baseline and the two policies, with endogenous marriage and without it (random matching, sorting, selection and sorting); `run_policies = false` runs the baseline only | Table 5 (models without endogenous marriage), Tables 7–10 |
 
 Outputs written to the working directory:
 
@@ -26,6 +26,7 @@ Outputs written to the working directory:
   `WageChangeAfterUnemployment_S_vs_M.png`, `WageChangeAfterUnemployment_Kids.png`;
   Figure 7: `EndogMarriedShare.png`, `EndogProductivities.png`; Figure 8:
   `HeatmapAbilitiesMarried.png`
+- `table5_decomposition.csv`: Table 5 with the intermediate counterfactuals
 - `policy_tables.csv`, `PolicyCounterfactuals_results.mat`: Tables 7–10
 
 The simulation is reproducible for a given `simParam.seed` regardless of the
@@ -42,7 +43,9 @@ number of parallel workers.
 | `SolveEndogProblem.m` | Singles' and couples' HJBs with endogenous marriage (Section 2.5, Appendix B) |
 | `approximateValueFunctions.m` | Interpolants of the value functions used in the simulation |
 | `SimulatePanel.m` | Simulated panel with endogenous marriage |
-| `SimulatePanelCounter.m` | Simulated panel without endogenous marriage (52% married at birth to a random partner, no further meetings; values solved with μ = 0) |
+| `SimulatePanelCounter.m` | Simulated panel without endogenous marriage (52% married at birth, no further meetings; values solved with μ = 0), with optional sorting (`param.exog_sort`) and selection (`param.exog_select`) on productivity at birth |
+| `calibrate_exog_marriage.m` | Chooses sorting and selection so that the economy without marital choice reproduces the baseline's spousal productivity correlation and married–single productivity gap |
+| `table5_decomposition.m` | Table 5: random matching, sorting, selection and sorting, endogenous marriage |
 | `compute_moments.m` | Moments from the simulated panel |
 | `calibration_table.m` | Model vs. data table (Tables 3–6) |
 | `fiscal_welfare.m` | Fiscal accounts (T, B, credits) and aggregate welfare (Section 5) |

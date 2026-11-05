@@ -49,12 +49,28 @@ if ~isfield(param,'accept_tau'),   param.accept_tau   = 0.00;     end  % surplus
 % ---- Exogenous marriage counterfactual (Table 5 / tab:decom) ----
 % No bilateral search or value comparison: each agent gets a single, one-time
 % draw right at (re)birth. With probability param.exog_marriage_prob they are
-% married off to a random partner and never search the marriage market again;
-% otherwise they stay single for the rest of that life-spell.
+% married off to a partner drawn from the pool and never search the marriage
+% market again; otherwise they stay single for the rest of that life-spell.
 % The value functions passed in must be solved with param.m = 0, so that no
 % agent expects to meet anyone after birth (see PolicyCounterfactuals.m).
 param.always_marry = true;
 if ~isfield(param,'exog_marriage_prob'), param.exog_marriage_prob = 0.52; end
+
+% Selection and sorting at birth (intermediate counterfactuals). Let r be
+% the newborn's productivity rank (quantile of a0 in the entry
+% distribution) and z = Phi^{-1}(r). With independent standard normals
+% e1, e2:
+%   married at birth  if  gamma*(-z) + sqrt(1-gamma^2)*e1 < Phi^{-1}(p),
+%   partner's productivity rank in the pool = Phi(rho*z + sqrt(1-rho^2)*e2).
+% The share married stays p for any gamma. gamma = param.exog_select
+% (selection into marriage on productivity), rho = param.exog_sort
+% (sorting between spouses). gamma = rho = 0 is random marriage and random
+% matching. See calibrate_exog_marriage.m.
+if ~isfield(param,'exog_select'), param.exog_select = 0; end
+if ~isfield(param,'exog_sort'),   param.exog_sort   = 0; end
+gam      = param.exog_select;
+rhoS     = param.exog_sort;
+zp_marry = norminv(param.exog_marriage_prob);
 if param.m ~= 0
     warning('SimulatePanelCounter:meetingRate', ...
         ['Value functions should be solved with param.m = 0 for this counterfactual ', ...
@@ -87,6 +103,8 @@ shadowF = solutionSP.solutionSf_s;
 shadowM = solutionSP.solutionSm_s;
 samplerPartnerF = buildShadowPartnerSampler(gridSf.a.a(:), gridSf.w.w(:), shadowF);
 samplerPartnerM = buildShadowPartnerSampler(gridSm.a.a(:), gridSm.w.w(:), shadowM);
+sortedPartnerF  = buildSortedPartnerSampler(gridSf.a.a(:), gridSf.w.w(:), shadowF);
+sortedPartnerM  = buildSortedPartnerSampler(gridSm.a.a(:), gridSm.w.w(:), shadowM);
 
 % ---- Pre-allocate (plain arrays; parfor-safe) ----
 Z  = NaN(N, T_total);  O = zeros(N, T_total);  NZ = NaN(N, T_total);
@@ -216,6 +234,9 @@ parfor i = 1:N
     br = birth(i,:);   % <<< ADD THIS (local buffer for birth events)
 
     isF = female(i);
+    Ue     = U_entry(i,:);   % entry uniforms (productivity ranks at (re)birth)
+    u_rank = Ue(1);
+    z_rank = 0;
 
     for t = 2:T_total
         h = dt_vec(t-1);  % months in this step
@@ -246,17 +267,26 @@ parfor i = 1:N
                           valueFunc, param, h, wgrid_f, edges_f, wgrid_m, edges_m, u_w_s);
 
 
-            % Marriage market meeting: one exogenous shot, only in the period
-            % immediately following (re)birth (nb(t-1)==1); no further chances
-            % afterward, and no dependence on the endogenous meeting rate param.m.
-            meet = (nb(t-1)==1) && (u_me < param.exog_marriage_prob);
+            % Marriage: one exogenous shot, only in the period immediately
+            % following (re)birth (nb(t-1)==1); no further chances afterward,
+            % and no dependence on the endogenous meeting rate param.m.
+            % With gam = 0 this is u_me < exog_marriage_prob.
+            meet = false;
+            if nb(t-1)==1
+                z_rank = norminv(min(max(u_rank, 1e-12), 1 - 1e-12));
+                meet   = (gam*(-z_rank) + sqrt(1 - gam^2)*norminv(u_me)) < zp_marry;
+            end
             in_keep = (t >= T0) && (t <= T1);
             if meet
                 if in_keep
                 meet_cnt(i) = meet_cnt(i) + 1;
                 end
                 if isF
-                    pm = samplerPartnerM(1);
+                    if rhoS == 0
+                        pm = samplerPartnerM(1);
+                    else
+                        pm = sortedPartnerM(normcdf(rhoS*z_rank + sqrt(1 - rhoS^2)*randn));
+                    end
                     hk = k(t) || pm.has_kids;
                     if in_keep
                         meet_partnerKids_cnt(i) = meet_partnerKids_cnt(i) + double(pm.has_kids);
@@ -307,7 +337,11 @@ parfor i = 1:N
 
                     end
                 else
-                    pf = samplerPartnerF(1);
+                    if rhoS == 0
+                        pf = samplerPartnerF(1);
+                    else
+                        pf = sortedPartnerF(normcdf(rhoS*z_rank + sqrt(1 - rhoS^2)*randn));
+                    end
                     hk = k(t) || pf.has_kids;
                     if in_keep
                         meet_partnerKids_cnt(i) = meet_partnerKids_cnt(i) + double(pf.has_kids);
@@ -379,10 +413,12 @@ parfor i = 1:N
             w(t) = 0; k(t) = 0;
             pa(t)=NaN; pe(t)=NaN; po(t)=NaN; pw(t)=NaN; mo(t)=0; jo(t)=0;
             if isF
-                a(t) = draw_entry_ability(U_entry(i,t), param.pf, param);
+                a(t) = draw_entry_ability(Ue(t), param.pf, param);
+                u_rank = Ue(t);
                 value_now_i = valueFunc.single_female.unemployed_nokid(a(t));
             else
-                a(t) = draw_entry_ability(U_entry(i,t), param.pm, param);
+                a(t) = draw_entry_ability(Ue(t), param.pm, param);
+                u_rank = Ue(t);
                 value_now_i = valueFunc.single_male.unemployed_nokid(a(t));
             end
             V(t) = value_now_i;
@@ -1092,6 +1128,59 @@ function sampler = buildShadowPartnerSampler(a_grid, w_grid, S)
             p(dd).wage     = w_draw;
             p(dd).has_kids = hasK(c);
         end
+    end
+end
+
+function sampler = buildSortedPartnerSampler(a_grid, w_grid, S)
+% Draws a partner from the pool S at a given productivity rank u in (0,1).
+% The partner's productivity is the u-quantile of the pool's productivity
+% distribution (uniform within node cells, as in buildShadowPartnerSampler);
+% the labor-market and parental state, and the wage of an employed partner,
+% are drawn from the pool conditional on that productivity cell.
+    a = a_grid(:); w = w_grid(:);
+    [aLo, aHi] = nodeCells(a);
+    [wLo, wHi] = nodeCells(w);
+    nA = numel(a);
+
+    %         el           ec           hl              hc              ol              oc
+    comps = {max(S.el,0), max(S.ec,0), max(S.hl(:),0), max(S.hc(:),0), max(S.ol(:),0), max(S.oc(:),0)};
+    isEmp = [1 1 0 0 0 0];
+    isOlf = [0 0 0 0 1 1];
+    hasK  = [0 1 0 1 0 1];
+
+    massA = zeros(nA, numel(comps));          % mass by ability node and state
+    for jc = 1:numel(comps)
+        if isEmp(jc)
+            massA(:,jc) = sum(reshape(comps{jc}, nA, []), 2);
+        else
+            massA(:,jc) = comps{jc}(:);
+        end
+    end
+    mA = sum(massA, 2);
+    if sum(mA) <= 0, error('Shadow distribution has zero mass.'); end
+    cumA = [0; cumsum(mA)] / sum(mA);
+
+    sampler = @draw_at;
+    function p = draw_at(u)
+        u  = min(max(u, 0), 1);
+        ia = find((u <= cumA(2:end)) & (mA > 0), 1);
+        if isempty(ia), ia = find(mA > 0, 1, 'last'); end
+        frac = (u - cumA(ia)) / max(cumA(ia+1) - cumA(ia), realmin);
+        frac = min(max(frac, 0), 1);
+        p.ability = aLo(ia) + frac*(aHi(ia) - aLo(ia));
+        pc = cumsum(massA(ia,:)) / mA(ia);  pc(end) = 1;
+        c  = find(rand <= pc, 1);
+        if isEmp(c)
+            wm = reshape(comps{c}, nA, []);  wm = wm(ia,:);
+            cw = cumsum(wm) / max(sum(wm), realmin);  cw(end) = 1;
+            iw = find(rand <= cw, 1);
+            p.wage = wLo(iw) + rand*(wHi(iw) - wLo(iw));
+        else
+            p.wage = 0;
+        end
+        p.employed = isEmp(c);
+        p.olf      = isOlf(c);
+        p.has_kids = hasK(c);
     end
 end
 
