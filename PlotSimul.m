@@ -5,7 +5,7 @@ function PlotSimul(agentPanel, param,valueFunc, opts)
 %
 % Inputs
 %   agentPanel : struct from SimulatePanel (burn-in already trimmed)
-%   param      : struct with tax handles (nokid_tax, onekid_tax), optional periods_per_year
+%   param      : struct with the disposable-income handle D, optional periods_per_year
 %   opts       : struct (optional)
 %       .outdir         default 'Plots'
 %       .nBinsAbility   default 25
@@ -75,8 +75,7 @@ pO     = agentPanel.partner_olf      == 1;
 pKnown = ~isnan(agentPanel.partner_employed) | ~isnan(agentPanel.partner_olf);
 pU     = (~pE & ~pO) & pKnown;
 
-% Realized wages / abilities (self & partner). Earnings come from the
-% simulation, which already applies the child wage cut (SimulatePanel.m).
+% Realized earnings theta_g w e^a (self & partner), from SimulatePanel.m
 A   = agentPanel.ability;
 W   = agentPanel.earnings;           % self
 pA   = agentPanel.partner_ability;
@@ -338,7 +337,8 @@ saveas(fig, fullfile(opts.outdir,'UnempRate_byAbility_Male.png'));
 %     Partner-inclusive (own + spouse), by ability bin
 % =====================================================================
 
-% Labor-force / unemployment masks (focal)
+% Labor-force / unemployment masks (focal). Unemployment rates divide by
+% the labor force (E + U), as in compute_moments.m.
 LF = ~O;             % in labor force
 U  = LF & ~E;        % unemployed
 
@@ -359,15 +359,15 @@ end
 % -----------------------------
 % Married females (own + partner is female)
 num_f_M_A  = bin([], U & M & gF,         'mass');
-den_f_M_A  = bin([],     M & gF,         'mass');
+den_f_M_A  = bin([], LF & M & gF,         'mass');
 num_f_M_pA = pbin([], pU & M & pgF,      'mass');
-den_f_M_pA = pbin([],     M & pgF,       'mass');
+den_f_M_pA = pbin([], pLF & M & pgF,      'mass');
 
 ur_f_M_both = (num_f_M_A + num_f_M_pA) ./ max(den_f_M_A + den_f_M_pA, SMALL);
 
 % Single females (no partner contribution)
 num_f_S = bin([], U & ~M & gF, 'mass');
-den_f_S = bin([],     ~M & gF, 'mass');
+den_f_S = bin([], LF & ~M & gF, 'mass');
 ur_f_S  = num_f_S ./ max(den_f_S, SMALL);
 
 gap_f = -100*(ur_f_M_both - ur_f_S);   % (S - M), in percentage points
@@ -380,14 +380,14 @@ saveas(fig, fullfile(opts.outdir,'EndogFemaleUnemploymentDiff.png'));
 % MALE
 % -----------------------------
 num_m_M_A  = bin([], U & M & gM,         'mass');
-den_m_M_A  = bin([],     M & gM,         'mass');
+den_m_M_A  = bin([], LF & M & gM,         'mass');
 num_m_M_pA = pbin([], pU & M & pgM,      'mass');
-den_m_M_pA = pbin([],     M & pgM,       'mass');
+den_m_M_pA = pbin([], pLF & M & pgM,      'mass');
 
 ur_m_M_both = (num_m_M_A + num_m_M_pA) ./ max(den_m_M_A + den_m_M_pA, SMALL);
 
 num_m_S = bin([], U & ~M & gM, 'mass');
-den_m_S = bin([],     ~M & gM, 'mass');
+den_m_S = bin([], LF & ~M & gM, 'mass');
 ur_m_S  = num_m_S ./ max(den_m_S, SMALL);
 
 gap_m = -100*(ur_m_M_both - ur_m_S);   % (S - M)
@@ -400,8 +400,8 @@ saveas(fig, fullfile(opts.outdir,'EndogMaleUnemploymentDiff.png'));
 % COMBINED (composition-weighted across genders, by bin)
 % Match your previous weighting approach but with partner-inclusive masses
 % -----------------------------
-mass_f_all_both = bin([], gF, 'mass') + pbin([], pgF, 'mass');
-mass_m_all_both = bin([], gM, 'mass') + pbin([], pgM, 'mass');
+mass_f_all_both = bin([], LF & gF, 'mass') + pbin([], pLF & pgF, 'mass');   % labor force
+mass_m_all_both = bin([], LF & gM, 'mass') + pbin([], pLF & pgM, 'mass');
 
 ur_M_all = (ur_m_M_both .* mass_m_all_both + ur_f_M_both .* mass_f_all_both) ./ ...
            max(mass_m_all_both + mass_f_all_both, SMALL);
@@ -635,10 +635,11 @@ Wall = R(:); Wall = Wall(isfinite(Wall) & Wall>0);
 if isempty(Wall), Wall = linspace(1,50,100)'; end
 wgrid = linspace(min(Wall), max(Wall), 400)';
 
-if isfield(param,'nokid_tax') && isfield(param,'onekid_tax')
+if isfield(param,'D')
+    % Single filer whose income is all earned (y = l)
     inc_pre = wgrid;
-    inc_post_nokid = param.nokid_tax(inc_pre, 0, param);
-    inc_post_kid   = param.onekid_tax(inc_pre, 0, param);
+    inc_post_nokid = param.D(inc_pre, inc_pre, 0, 0, param);
+    inc_post_kid   = param.D(inc_pre, inc_pre, 1, 0, param);
     atr_nokid = 1 - inc_post_nokid./max(inc_pre,SMALL);
     atr_kid   = 1 - inc_post_kid  ./max(inc_pre,SMALL);
 

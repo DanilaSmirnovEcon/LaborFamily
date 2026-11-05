@@ -28,12 +28,12 @@ function solutionS = SolveSingleProblem(param, pg, gridS)
     c_a   = param.c(gridS.a.a);                          % child cost vector (a × 1)
 
     % ---------- initial guesses ----------
-    solutionS.JlValue = util(param, param.nokid_tax(W_eff, AA, param));
-    solutionS.UlValue = util(param, param.nokid_tax(param.b(gridS.a.a), gridS.a.a, param));
+    solutionS.JlValue = util(param, param.D(W_eff, W_eff, 0, 0, param));
+    solutionS.UlValue = util(param, param.D(param.b(gridS.a.a), 0, 0, 0, param));
     solutionS.OlValue = util(param, pg.hs0 .* ones(gridS.a.n,1));
 
-    solutionS.JcValue = util(param, param.onekid_tax(W_eff, AA, param) - repmat(c_a,1,gridS.w.n));
-    solutionS.UcValue = util(param, param.onekid_tax(param.b(gridS.a.a), gridS.a.a, param) - c_a);
+    solutionS.JcValue = util(param, param.D(W_eff, W_eff, 1, 0, param) - repmat(c_a,1,gridS.w.n));
+    solutionS.UcValue = util(param, param.D(param.b(gridS.a.a), 0, 1, 0, param) - c_a);
     solutionS.OcValue = util(param, pg.hs1 - c_a);
 
     % ---------- iterate on values ----------
@@ -236,18 +236,18 @@ function solutionS = SolveSingleProblem(param, pg, gridS)
     end
 
     % ---------- instantaneous utilities (paper, Section 2.1) ----------
-    % c(W,k) = D_k(w e^a) - k kappa(a),  c(U,k) = D_k(b(a)) - k kappa(a),
+    % c(W,k) = D^s_k(w e^a, w e^a) - k kappa(a),  c(U,k) = D^s_k(b(a), 0) - k kappa(a),
     % c(O,k) = h^s_{g,k} - k kappa(a)  (home production is not taxed)
     function u = instUtilityOl
         cons = pg.hs0 .* ones(gridS.a.n,1);
         u    = util(param, cons);
     end
     function u = instUtilityUl
-        cons = param.nokid_tax(param.b(gridS.a.a), gridS.a.a, param);
+        cons = param.D(param.b(gridS.a.a), 0, 0, 0, param);
         u    = util(param, cons) .* ones(gridS.a.n,1);
     end
     function u = instUtilityJl
-        cons = param.nokid_tax(W_eff, AA, param);
+        cons = param.D(W_eff, W_eff, 0, 0, param);
         u    = util(param, cons);
     end
     function u = instUtilityOc
@@ -255,11 +255,11 @@ function solutionS = SolveSingleProblem(param, pg, gridS)
         u    = util(param, cons) .* ones(gridS.a.n,1);
     end
     function u = instUtilityUc
-        cons = param.onekid_tax(param.b(gridS.a.a), gridS.a.a, param) - c_a;
+        cons = param.D(param.b(gridS.a.a), 0, 1, 0, param) - c_a;
         u    = util(param, cons) .* ones(gridS.a.n,1);
     end
     function u = instUtilityJc
-        cons = param.onekid_tax(W_eff, AA, param) - repmat(c_a,1,gridS.w.n);
+        cons = param.D(W_eff, W_eff, 1, 0, param) - repmat(c_a,1,gridS.w.n);
         u    = util(param, cons);
     end
 

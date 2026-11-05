@@ -3941,43 +3941,42 @@ end
 % =========================================================================
 % Instantaneous utilities (paper, Section 2.1)
 % =========================================================================
-% Singles: c(W,k) = D_k(w e^a) - k kappa(a),  c(U,k) = D_k(b(a)) - k kappa(a),
-%          c(O,k) = h^s_{g,k} - k kappa(a).
-% Couples: c = [D_k(y_f + y_m) + H_f + H_m - k kappa((a_f + a_m)/2)] / 2 per
-%          spouse, with y = w e^a (W), b(a) (U), 0 (O) and H = h^c_{g,k} (O).
-% D_0 = param.nokid_tax, D_1 = param.onekid_tax; home production is not
-% taxed. Women's wage grids already include theta_w (Build*Grid).
+% Singles: c(W,k) = D^s_k(w e^a, w e^a) - k kappa(a),
+%          c(U,k) = D^s_k(b(a), 0) - k kappa(a),  c(O,k) = h^s_{g,k} - k kappa(a).
+% Couples: c = [D^c_k(y_f + y_m, l_f + l_m) + H_f + H_m - k kappa((a_f + a_m)/2)] / 2
+%          per spouse, with taxable income y = w e^a (W), b(a) (U), 0 (O),
+%          earnings l = w e^a (W), 0 (U, O), and H = h^c_{g,k} (O).
+% D^M_k(y, l) = param.D(y, l, k, M, param); home production is not taxed.
+% Women's wage grids already include theta_w (Build*Grid).
 
 function u = instUtilityOl(gridS,pg)
     u = util(param, pg.hs0 .* ones(gridS.a.n,1));
 end
 function u = instUtilityUl(gridS,pg) %#ok<INUSD>
-    u = util(param, param.nokid_tax(param.b(gridS.a.a),gridS.a.a,param));
+    u = util(param, param.D(param.b(gridS.a.a), 0, 0, 0, param));
 end
 function u = instUtilityJl(gridS,pg) %#ok<INUSD>
-    u = util(param, param.nokid_tax(gridS.w.ww.*exp(gridS.a.aa),gridS.a.a,param));
+    u = util(param, param.D(gridS.w.ww.*exp(gridS.a.aa), gridS.w.ww.*exp(gridS.a.aa), 0, 0, param));
 end
 function u = instUtilityOc(gridS,pg)
     u = util(param, pg.hs1 - param.c(gridS.a.a));
 end
 function u = instUtilityUc(gridS,pg) %#ok<INUSD>
-    u = util(param, param.onekid_tax(param.b(gridS.a.a),gridS.a.a,param) - param.c(gridS.a.a));
+    u = util(param, param.D(param.b(gridS.a.a), 0, 1, 0, param) - param.c(gridS.a.a));
 end
 function u = instUtilityJc(gridS,pg) %#ok<INUSD>
-    u = util(param, param.onekid_tax(gridS.w.ww.*exp(gridS.a.aa),gridS.a.a,param) - param.c(gridS.a.aa));
+    u = util(param, param.D(gridS.w.ww.*exp(gridS.a.aa), gridS.w.ww.*exp(gridS.a.aa), 1, 0, param) - param.c(gridS.a.aa));
 end
 
-function u = coupleUtility(y, H, k)
+function u = coupleUtility(y, l, H, k)
     % Per-spouse utility on the [af x wf x am x wm] grid: y = pooled taxable
-    % income, H = home production of spouses out of the labor force,
-    % k = child indicator. One household child cost at average productivity.
+    % income, l = pooled earnings, H = home production of spouses out of the
+    % labor force, k = child indicator. Joint filing (M = 1); one household
+    % child cost at average productivity.
     amid = (gridP.af.aa + gridP.am.aa)./2;
     y    = y + zeros(size(amid));
-    if k
-        cons = (param.onekid_tax(y, amid, param) + H - param.c(amid)) ./ 2;
-    else
-        cons = (param.nokid_tax(y, amid, param) + H) ./ 2;
-    end
+    l    = l + zeros(size(amid));
+    cons = (param.D(y, l, k, 1, param) + H - k*param.c(amid)) ./ 2;
     u = util(param, cons);
 end
 
@@ -3988,42 +3987,42 @@ end
 function u = instUtilityJJl()
     Yf = gridP.wf.ww .* exp(gridP.af.aa);
     Ym = gridP.wm.ww .* exp(gridP.am.aa);
-    u  = coupleUtility(Yf + Ym, 0, 0);                         % [af x wf x am x wm]
+    u  = coupleUtility(Yf + Ym, Yf + Ym, 0, 0);                         % [af x wf x am x wm]
 end
 function u = instUtilityJUl()
     Yf = gridP.wf.ww .* exp(gridP.af.aa);
-    u4 = coupleUtility(Yf + param.b(gridP.am.aa), 0, 0);
+    u4 = coupleUtility(Yf + param.b(gridP.am.aa), Yf, 0, 0);
     u  = squeeze(u4(:,:,:,1));                                 % [af x wf x am]
 end
 function u = instUtilityUJl()
     Ym = gridP.wm.ww .* exp(gridP.am.aa);
-    u4 = coupleUtility(param.b(gridP.af.aa) + Ym, 0, 0);
+    u4 = coupleUtility(param.b(gridP.af.aa) + Ym, Ym, 0, 0);
     u  = squeeze(u4(:,1,:,:));                                 % [af x am x wm]
 end
 function u = instUtilityUUl()
-    u4 = coupleUtility(param.b(gridP.af.aa) + param.b(gridP.am.aa), 0, 0);
+    u4 = coupleUtility(param.b(gridP.af.aa) + param.b(gridP.am.aa), 0, 0, 0);
     u  = squeeze(u4(:,1,:,1));                                 % [af x am]
 end
 function u = instUtilityJOl()
     Yf = gridP.wf.ww .* exp(gridP.af.aa);
-    u4 = coupleUtility(Yf, param.pm.hc0, 0);
+    u4 = coupleUtility(Yf, Yf, param.pm.hc0, 0);
     u  = squeeze(u4(:,:,:,1));                                 % [af x wf x am]
 end
 function u = instUtilityOJl()
     Ym = gridP.wm.ww .* exp(gridP.am.aa);
-    u4 = coupleUtility(Ym, param.pf.hc0, 0);
+    u4 = coupleUtility(Ym, Ym, param.pf.hc0, 0);
     u  = squeeze(u4(:,1,:,:));                                 % [af x am x wm]
 end
 function u = instUtilityUOl()
-    u4 = coupleUtility(param.b(gridP.af.aa), param.pm.hc0, 0);
+    u4 = coupleUtility(param.b(gridP.af.aa), 0, param.pm.hc0, 0);
     u  = squeeze(u4(:,1,:,1));                                 % [af x am]
 end
 function u = instUtilityOUl()
-    u4 = coupleUtility(param.b(gridP.am.aa), param.pf.hc0, 0);
+    u4 = coupleUtility(param.b(gridP.am.aa), 0, param.pf.hc0, 0);
     u  = squeeze(u4(:,1,:,1));                                 % [af x am]
 end
 function u = instUtilityOOl()
-    u4 = coupleUtility(0, param.pf.hc0 + param.pm.hc0, 0);
+    u4 = coupleUtility(0, 0, param.pf.hc0 + param.pm.hc0, 0);
     u  = squeeze(u4(:,1,:,1));                                 % [af x am]
 end
 
@@ -4034,42 +4033,42 @@ end
 function u = instUtilityJJc()
     Yf = gridP.wf.ww .* exp(gridP.af.aa);
     Ym = gridP.wm.ww .* exp(gridP.am.aa);
-    u  = coupleUtility(Yf + Ym, 0, 1);                         % [af x wf x am x wm]
+    u  = coupleUtility(Yf + Ym, Yf + Ym, 0, 1);                         % [af x wf x am x wm]
 end
 function u = instUtilityJUc()
     Yf = gridP.wf.ww .* exp(gridP.af.aa);
-    u4 = coupleUtility(Yf + param.b(gridP.am.aa), 0, 1);
+    u4 = coupleUtility(Yf + param.b(gridP.am.aa), Yf, 0, 1);
     u  = squeeze(u4(:,:,:,1));                                 % [af x wf x am]
 end
 function u = instUtilityUJc()
     Ym = gridP.wm.ww .* exp(gridP.am.aa);
-    u4 = coupleUtility(param.b(gridP.af.aa) + Ym, 0, 1);
+    u4 = coupleUtility(param.b(gridP.af.aa) + Ym, Ym, 0, 1);
     u  = squeeze(u4(:,1,:,:));                                 % [af x am x wm]
 end
 function u = instUtilityUUc()
-    u4 = coupleUtility(param.b(gridP.af.aa) + param.b(gridP.am.aa), 0, 1);
+    u4 = coupleUtility(param.b(gridP.af.aa) + param.b(gridP.am.aa), 0, 0, 1);
     u  = squeeze(u4(:,1,:,1));                                 % [af x am]
 end
 function u = instUtilityJOc()
     Yf = gridP.wf.ww .* exp(gridP.af.aa);
-    u4 = coupleUtility(Yf, param.pm.hc1, 1);
+    u4 = coupleUtility(Yf, Yf, param.pm.hc1, 1);
     u  = squeeze(u4(:,:,:,1));                                 % [af x wf x am]
 end
 function u = instUtilityOJc()
     Ym = gridP.wm.ww .* exp(gridP.am.aa);
-    u4 = coupleUtility(Ym, param.pf.hc1, 1);
+    u4 = coupleUtility(Ym, Ym, param.pf.hc1, 1);
     u  = squeeze(u4(:,1,:,:));                                 % [af x am x wm]
 end
 function u = instUtilityUOc()
-    u4 = coupleUtility(param.b(gridP.af.aa), param.pm.hc1, 1);
+    u4 = coupleUtility(param.b(gridP.af.aa), 0, param.pm.hc1, 1);
     u  = squeeze(u4(:,1,:,1));                                 % [af x am]
 end
 function u = instUtilityOUc()
-    u4 = coupleUtility(param.b(gridP.am.aa), param.pf.hc1, 1);
+    u4 = coupleUtility(param.b(gridP.am.aa), 0, param.pf.hc1, 1);
     u  = squeeze(u4(:,1,:,1));                                 % [af x am]
 end
 function u = instUtilityOOc()
-    u4 = coupleUtility(0, param.pf.hc1 + param.pm.hc1, 1);
+    u4 = coupleUtility(0, 0, param.pf.hc1 + param.pm.hc1, 1);
     u  = squeeze(u4(:,1,:,1));                                 % [af x am]
 end
 
