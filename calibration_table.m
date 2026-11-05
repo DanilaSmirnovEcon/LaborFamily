@@ -69,6 +69,7 @@ add(s, 'Unemployment rate, singles (%)',  pct('never_married.unemployed'), 6.51)
 add(s, 'Unemployment rate, with kids (%)', pct('haschild.unemployed'),     3.90);
 add(s, 'Unemployment rate, no kids (%)',  pct('nochild.unemployed'),       5.28);
 add(s, 'Wage correlation between spouses', getf(m,'corr_wages'),           0.35);
+add(s, 'Elasticity of marriage rates to wages', getf(m,'marriage_wage.elasticity'), 0.22);
 add(s, 'Age at first marriage, men',      getf(m,'age_at_marriage.men_years'),   28.3);
 add(s, 'Age at first marriage, women',    getf(m,'age_at_marriage.women_years'), 25.9);
 

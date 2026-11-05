@@ -66,17 +66,21 @@ param.averagewage = 61;         % ybar: income normalization (c.u.)
 param.adjustW      = param.averagewage/25;     % c.u. per $/hour
 param.adjustWScale = param.averagewage/45000;  % c.u. per annual $
 
-% Child-based tax credit C_k(y) (EITC; Garstenauer and Siassi, 2024)
+% Earned income tax credit C^M_k(y, l) (2018 EITC, paper eq. eitc_credit):
+% phases in with household earnings l, phases out with household taxable
+% income y (earnings plus unemployment benefits) above a threshold that
+% depends on marital status M. Maximum credit Cbar_k = beta^Y1_k y^Y1_k.
 param.pi1_n0 = 0.0765;          % beta^Y1_0: phase-in rate, no child
 param.pi1_n1 = 0.34;            % beta^Y1_1: phase-in rate, child
 param.pi2_n0 = 0.0765;          % beta^Y2_0: phase-out rate, no child
 param.pi2_n1 = 0.1598;          % beta^Y2_1: phase-out rate, child
 param.E1_n0  = 6750  * param.adjustWScale;   % y^Y1_0: end of phase-in, no child
 param.E1_n1  = 10150 * param.adjustWScale;   % y^Y1_1: end of phase-in, child
-param.E2_n0  = 14200 * param.adjustWScale;   % y^Y2_0: start of phase-out, no child
-param.E2_n1  = 24350 * param.adjustWScale;   % y^Y2_1: start of phase-out, child
-% The credit is zero from y = E2 + pi1*E1/pi2 on: $20,950 (no child) and
-% about $46,000 (child), the EITC eligibility caps.
+param.E2s_n0 = 8490  * param.adjustWScale;   % y^Y2,s_0: start of phase-out, single, no child
+param.E2s_n1 = 18660 * param.adjustWScale;   % y^Y2,s_1: start of phase-out, single, child
+param.E2c_n0 = 14170 * param.adjustWScale;   % y^Y2,c_0: start of phase-out, couple, no child
+param.E2c_n1 = 24350 * param.adjustWScale;   % y^Y2,c_1: start of phase-out, couple, child
+% The credit reaches zero at y^Y2,M_k + Cbar_k/beta^Y2_k.
 
 % Unemployment benefits b(a) = min{bmin + bscale e^a, bmax}
 param.bmin   = 15.85;           % b_min (c.u.)
@@ -136,13 +140,12 @@ param.c = @(x) param.cmin + param.cscale.*exp(x);                    % kappa(a)
 param.tax = @(x, param) max((param.lambda_tax .* ...
     ((x./param.averagewage).^(1-param.tau_tax)) .* param.averagewage), 0.5.*x);
 
-% C_k(y): child-based tax credits
-param.tax_rebait_kid   = @(x, param) tax_rebait_kid(x, param);
-param.tax_rebait_nokid = @(x, param) tax_rebait_nokid(x, param);
+% C^M_k(y, l): earned income tax credit; k = 1 with a child, M = 1 for a
+% couple (filing jointly), 0 for a single
+param.credit = @(y, l, k, M, param) eitc(y, l, k, M, param);
 
-% D_k(y) = N(y) + C_k(y): disposable resources (a is unused)
-param.nokid_tax  = @(x, a, param) param.tax(x, param) + param.tax_rebait_nokid(x, param);
-param.onekid_tax = @(x, a, param) param.tax(x, param) + param.tax_rebait_kid(x, param);
+% D^M_k(y, l) = N(y) + C^M_k(y, l): disposable resources
+param.D = @(y, l, k, M, param) param.tax(y, param) + param.credit(y, l, k, M, param);
 
 %==========================================================================
 %% WAGE OFFER DISTRIBUTION
@@ -163,19 +166,19 @@ param.f_long = param.f_long ./ sum(param.f_long);
 end
 
 %==========================================================================
-%% CHILD-BASED TAX CREDITS C_k(y)
+%% EARNED INCOME TAX CREDIT C^M_k(y, l)
 %==========================================================================
 
-function rebait = tax_rebait_nokid(x, param)
-    % Households without children (k = 0)
-    rebait = param.pi1_n0 .* x .* (x < param.E1_n0) + ...
-             param.pi1_n0 .* param.E1_n0 .* (x >= param.E1_n0) .* (x < param.E2_n0) + ...
-             max(0, param.pi1_n0 .* param.E1_n0 - param.pi2_n0 .* (x - param.E2_n0)) .* (x >= param.E2_n0);
-end
-
-function rebait = tax_rebait_kid(x, param)
-    % Households with a child (k = 1)
-    rebait = param.pi1_n1 .* x .* (x < param.E1_n1) + ...
-             param.pi1_n1 .* param.E1_n1 .* (x >= param.E1_n1) .* (x < param.E2_n1) + ...
-             max(0, param.pi1_n1 .* param.E1_n1 - param.pi2_n1 .* (x - param.E2_n1)) .* (x >= param.E2_n1);
+function C = eitc(y, l, k, M, param)
+    % min{ beta1 l, Cbar, [Cbar - beta2 (y - y^Y2,M)^+]^+ }, with k and M
+    % scalars; no credit without earnings
+    if k
+        b1 = param.pi1_n1;  b2 = param.pi2_n1;  y1 = param.E1_n1;
+        if M, y2 = param.E2c_n1; else, y2 = param.E2s_n1; end
+    else
+        b1 = param.pi1_n0;  b2 = param.pi2_n0;  y1 = param.E1_n0;
+        if M, y2 = param.E2c_n0; else, y2 = param.E2s_n0; end
+    end
+    Cbar = b1 * y1;
+    C = min(min(b1 .* l, Cbar), max(Cbar - b2 .* max(y - y2, 0), 0));
 end

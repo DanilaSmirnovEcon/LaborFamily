@@ -13,7 +13,7 @@ without it the simulation runs serially).
 
 | Script | What it does | Paper output |
 |---|---|---|
-| `Main.m` | Solves the baseline model, simulates a panel of households, computes moments, prints them next to the data targets and draws the figures | Tables 3, 4 (except the elasticity of marriage rates to wages), 5 (model with endogenous marriage), 6; Figures 1, 5, 6, 7, 8 |
+| `Main.m` | Solves the baseline model, simulates a panel of households, computes moments, prints them next to the data targets and draws the figures | Tables 3, 4, 5 (model with endogenous marriage), 6; Figures 1, 5, 6, 7, 8 |
 | `PolicyCounterfactuals.m` | Solves and simulates the baseline and the two policies, with and without endogenous marriage (about 6 times the run time of `Main.m`) | Table 5 (model without endogenous marriage), Tables 7–10 |
 
 Outputs written to the working directory:
@@ -64,7 +64,7 @@ year ($25 an hour) in 2018 dollars.
 | η1, η2 | `param.lambda_tax`, `param.tau_tax` | h^s_{g,k}, h^c_{g,k} | `pf/pm.hs0, hs1, hc0, hc1` |
 | ȳ | `param.averagewage` | θ_w | `param.theta_w` (`pf.wscale`) |
 | β^{Y1}_k, β^{Y2}_k | `param.pi1_n0/n1`, `param.pi2_n0/n1` | σ_w | `param.sigma_w` |
-| y^{Y1}_k, y^{Y2}_k | `param.E1_n0/n1`, `param.E2_n0/n1` | δ_g | `pf/pm.delta` |
+| y^{Y1}_k, y^{Y2,s}_k, y^{Y2,c}_k | `param.E1_n0/n1`, `param.E2s_n0/n1`, `param.E2c_n0/n1` | δ_g | `pf/pm.delta` |
 | b_min, b_scale, b_max | `param.bmin`, `param.bscale`, `param.bmax` | λ_g | `pf/pm.lambda_u` |
 | φ_e, φ_ne | `param.phi_e`, `param.phi_ne` | ν_g | `pf/pm.lambda_oE` |
 | ε, ā | `param.epsilon`, `param.abar` | μ_a0, σ_a0 | `param.mu_a0`, `param.sigma_a0` |

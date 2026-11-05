@@ -141,6 +141,15 @@ numU_k   = sum(U & single  & KK,'all') + sum(U  & married & KK,'all') + sum(pU  
 numO_nk  = sum(O & single  & KN,'all') + sum(O  & married & KN,'all') + sum(pO  & married & KN,'all');
 numU_nk  = sum(U & single  & KN,'all') + sum(U  & married & KN,'all') + sum(pU  & married & KN,'all');
 
+% Employment (for unemployment rates, denominator E + U as in the CPS)
+numE_all = sum(E & single,'all') + sum(E & married,'all') + sum(pE & pKnown & married,'all');
+numE_nm  = sum(E & single,'all');
+numE_m   = sum(E & married,'all') + sum(pE & pKnown & married,'all');
+numE_w   = sum(E & single  & gF,'all') + sum(E  & married & gF ,'all') + sum(pE & pKnown & married & pgF,'all');
+numE_men = sum(E & single  & gM,'all') + sum(E  & married & gM ,'all') + sum(pE & pKnown & married & pgM,'all');
+numE_k   = sum(E & single  & KK,'all') + sum(E  & married & KK,'all') + sum(pE & pKnown & married & KK,'all');
+numE_nk  = sum(E & single  & KN,'all') + sum(E  & married & KN,'all') + sum(pE & pKnown & married & KN,'all');
+
 % ---- Rates: state | group
 moments.all.out_of_lf            = numO_all / den_all;
 moments.never_married.out_of_lf  = numO_nm  / den_nm;
@@ -150,13 +159,25 @@ moments.men.out_of_lf            = numO_men / den_men;
 moments.haschild.out_of_lf       = numO_k   / den_k;
 moments.nochild.out_of_lf        = numO_nk  / den_nk;
 
-moments.all.unemployed           = numU_all / den_all;
-moments.never_married.unemployed = numU_nm  / den_nm;
-moments.married.unemployed       = numU_m   / den_m;
-moments.women.unemployed         = numU_w   / den_women;
-moments.men.unemployed           = numU_men / den_men;
-moments.haschild.unemployed      = numU_k   / den_k;
-moments.nochild.unemployed       = numU_nk  / den_nk;
+% Unemployment rate: U / (E + U), labor force only (paper, Section 3.1)
+urate = @(u, e) u / max(u + e, SMALL);
+moments.all.unemployed           = urate(numU_all, numE_all);
+moments.never_married.unemployed = urate(numU_nm,  numE_nm);
+moments.married.unemployed       = urate(numU_m,   numE_m);
+moments.women.unemployed         = urate(numU_w,   numE_w);
+moments.men.unemployed           = urate(numU_men, numE_men);
+moments.haschild.unemployed      = urate(numU_k,   numE_k);
+moments.nochild.unemployed       = urate(numU_nk,  numE_nk);
+
+% Unemployed as a share of the whole group (including those out of the
+% labor force), kept for reference
+moments.all.unemployed_share           = numU_all / den_all;
+moments.never_married.unemployed_share = numU_nm  / den_nm;
+moments.married.unemployed_share       = numU_m   / den_m;
+moments.women.unemployed_share         = numU_w   / den_women;
+moments.men.unemployed_share           = numU_men / den_men;
+moments.haschild.unemployed_share      = numU_k   / den_k;
+moments.nochild.unemployed_share       = numU_nk  / den_nk;
 
 % ---- Out-of-LF share by marital status x gender x kids (paper Table 3).
 % Same person-time accounting as above: in couples both spouses count.
@@ -487,6 +508,46 @@ if isfield(param,'c') && isa(param.c,'function_handle')
 else
     moments.child_cost = struct('median_income',NaN,'low',struct('mean_share',NaN),...
                                 'high',struct('mean_share',NaN),'mean_share',NaN);
+end
+
+%% ========== 7b) Elasticity of marriage rates to wages ===================
+% Log-link regression on employed person-time:
+%   E[married | w, g] = exp(alpha + beta log(w) + gamma female),
+% estimated by Poisson quasi-maximum likelihood (IRLS). beta is the
+% elasticity of the marriage rate to the individual's own wage (Table 4).
+% Also reports marriage rates by wage quintile (quintiles formed within
+% gender), the model counterpart of the appendix figure on marriage rates
+% by wage quintile.
+moments.marriage_wage.elasticity     = NaN;
+moments.marriage_wage.quintile_rates = NaN(1,5);
+okW = E & isfinite(W) & (W > 0);
+if nnz(okW) > 10
+    yM  = double(M(okW));
+    lw  = log(W(okW));
+    fF  = double(gF(okW));
+    X   = [ones(numel(yM),1), lw, fF];
+    b   = [log(max(mean(yM), SMALL)); 0; 0];
+    for it = 1:100
+        eta = X*b;  mu = exp(eta);
+        z   = eta + (yM - mu)./mu;
+        bn  = (X' * (mu.*X)) \ (X' * (mu.*z));
+        if max(abs(bn - b)) < 1e-10, b = bn; break; end
+        b = bn;
+    end
+    moments.marriage_wage.elasticity = b(2);
+
+    % Marriage rates by wage quintile (within gender), pooled
+    q = zeros(size(lw));
+    for gg = 0:1
+        sel = (fF == gg);
+        if any(sel)
+            edges = quantile(lw(sel), [0.2 0.4 0.6 0.8]);
+            q(sel) = 1 + sum(lw(sel) > edges(:)', 2);
+        end
+    end
+    for qq = 1:5
+        moments.marriage_wage.quintile_rates(qq) = mean(yM(q == qq));
+    end
 end
 
 %% ========== 8) Median age at (first) marriage (years of age) ============

@@ -5,7 +5,8 @@
 % Dynamics in a Joint-Search Framework", Section 5:
 %   1. ub_plus15      - 15% higher minimum unemployment benefit b_min
 %   2. credit_plus20  - 20% higher income caps {y^Y1_1, y^Y2_1} for the
-%                       child-based tax credit (households with a child)
+%                       child-based tax credit (households with a child,
+%                       single and married)
 % Other parameters stay at the baseline (Param_Gen, Param_F, Param_M).
 %
 % For each policy and the baseline the model is solved and simulated
@@ -127,8 +128,11 @@ end
 
 function param = apply_credit_plus20(param)
     % Table 9-10: 20% higher income caps for the child-based tax credit,
-    % households with a dependent child only (k = 1): the end of the
-    % phase-in (y^Y1_1) and the start of the phase-out (y^Y2_1).
-    param.E1_n1 = param.E1_n1 * 1.20;
-    param.E2_n1 = param.E2_n1 * 1.20;
+    % households with a dependent child only (k = 1), regardless of marital
+    % status: the end of the phase-in (y^Y1_1, which also raises the
+    % maximum credit beta^Y1_1 y^Y1_1) and the start of the phase-out for
+    % singles and couples (y^Y2,s_1 and y^Y2,c_1).
+    param.E1_n1  = param.E1_n1  * 1.20;
+    param.E2s_n1 = param.E2s_n1 * 1.20;
+    param.E2c_n1 = param.E2c_n1 * 1.20;
 end
