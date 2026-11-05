@@ -462,12 +462,9 @@ end
 %% ========== 6) Assortative matching (within couples) ====================
 mask_couple_we = M & E & pE;
 if any(mask_couple_we(:))
-    x = log(W);  y = log(pW);
-    x = x(mask_couple_we);
-    x = nonzeros(x);
-    y = y(mask_couple_we);
-    y = nonzeros(y);
-    C = corrcoef(x, y, 'Rows','complete');%C = corrcoef(x(mask_couple_we), y(mask_couple_we), 'Rows','complete');
+    x = log(W(mask_couple_we));  y = log(pW(mask_couple_we));
+    okp = isfinite(x) & isfinite(y);
+    C = corrcoef(x(okp), y(okp));
     moments.corr_wages = C(1,2);
 else
     moments.corr_wages = NaN;
@@ -483,6 +480,15 @@ if any(mask_couple(:))
 else
     moments.corr_ability = NaN;
 end
+
+% Selection into marriage: mean productivity of married individuals (both
+% spouses) and of singles, and the gap
+pA = agentPanel.partner_ability;
+aM = [A(M); pA(M)];  aM = aM(isfinite(aM));
+aS = A(NM);          aS = aS(isfinite(aS));
+moments.mean_ability.married = mean(aM);
+moments.mean_ability.single  = mean(aS);
+moments.mean_ability.gap     = moments.mean_ability.married - moments.mean_ability.single;
 
 %% ========== 7) Child cost by income bin (optional) ======================
 % Child cost kappa(a) as a share of household labor earnings, for

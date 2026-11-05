@@ -9,22 +9,35 @@
 %                       single and married)
 % Other parameters stay at the baseline (Param_Gen, Param_F, Param_M).
 %
-% For each policy and the baseline the model is solved and simulated
-% twice:
-%   - endogenous marriage: SolveEndogProblem + SimulatePanel
+% For each policy and the baseline the model is solved and simulated:
+%   - with endogenous marriage: SolveEndogProblem + SimulatePanel
 %   - without endogenous marriage (Table 5 counterfactual): values are
 %     re-solved with a zero meeting rate (param.m = 0), so nobody expects
-%     to meet, and SimulatePanelCounter marries 52% of newborns to a
-%     random partner at birth
+%     to meet, and SimulatePanelCounter marries 52% of newborns at birth:
+%       exog         - to a random partner (random matching)
+%       exog_sort    - with sorting: spouses' productivity correlation as
+%                      in the baseline with endogenous marriage
+%       exog_selsort - with selection and sorting: also the baseline's
+%                      productivity gap between married and singles
+%     The sorting and selection parameters are calibrated once, on the
+%     baseline (calibrate_exog_marriage.m), and held fixed under the
+%     policies, like the marriage rate.
 %
-% Outputs: Tables 7-10 printed and saved to policy_tables.csv
-% (policy_tables.m), plus all moments, fiscal accounts and welfare in
-% PolicyCounterfactuals_results.mat.
+% Outputs: Table 5 with the intermediate counterfactuals
+% (table5_decomposition.m, table5_decomposition.csv) and Tables 7-10
+% (policy_tables.m, policy_tables.csv), plus all moments, fiscal accounts
+% and welfare in PolicyCounterfactuals_results.mat.
 %
-% Run manually (not called from Main.m); it takes about 6x as long as Main.
+% Run manually (not called from Main.m). Set run_policies = false for the
+% baseline only (Table 5). The calibration of the intermediate
+% counterfactuals adds about 10-30 simulations of the baseline.
 %==========================================================================
 
 clear all; close all;
+
+run_policies = true;    % false: baseline only (Table 5)
+run_sorting  = true;    % intermediate counterfactuals (sorting, selection)
+calibTargets.corr_field = 'corr_ability';   % or 'corr_wages'
 
 % Policy changes are applied inside Param_Gen, before b(a), kappa(a) and
 % the tax functions are built, so that the functions reflect them.
@@ -32,6 +45,7 @@ policies = struct( ...
     'name',  {'baseline',  'ub_plus15',        'credit_plus20'}, ...
     'apply', {[],          @apply_ub_plus15,   @apply_credit_plus20} ...
 );
+if ~run_policies, policies = policies(1); end
 
 simParam = struct( ...
   'N',                 1000, ...
@@ -92,12 +106,36 @@ for k = 1:numel(policies)
     moments_exog = compute_moments(agentPanel_exog, simParam, param_x);
     fw_exog      = fiscal_welfare(agentPanel_exog, param_x);
 
-    % ---- 5. Store and save ----
+    % ---- 5. Store ----
     results.(name).param         = param;
     results.(name).moments_endog = moments_endog;
     results.(name).moments_exog  = moments_exog;
     results.(name).fw_endog      = fw_endog;
     results.(name).fw_exog       = fw_exog;
+
+    % ---- 4c. Without endogenous marriage, with sorting / selection ----
+    if run_sorting
+        if strcmp(name, 'baseline')
+            % Calibrate to the baseline with endogenous marriage
+            calibTargets.corr = moments_endog.(calibTargets.corr_field);
+            calibTargets.gap  = moments_endog.mean_ability.gap;
+            [~, rS, infoS] = calibrate_exog_marriage('sorting', calibTargets, ...
+                solutionSP_x, valueFunc_x, gridSf, gridSm, gridP, param_x, simParam);
+            [gSS, rSS, infoSS] = calibrate_exog_marriage('selection_sorting', calibTargets, ...
+                solutionSP_x, valueFunc_x, gridSf, gridSm, gridP, param_x, simParam);
+            exogCal.sort    = struct('gam', 0,   'rho', rS,  'info', infoS);
+            exogCal.selsort = struct('gam', gSS, 'rho', rSS, 'info', infoSS);
+            results.(name).exog_calibration = exogCal;
+        end
+        variants = {'sort', 'selsort'};
+        for v = 1:numel(variants)
+            cv = exogCal.(variants{v});
+            pv = param_x;  pv.exog_select = cv.gam;  pv.exog_sort = cv.rho;
+            panel = SimulatePanelCounter(solutionSP_x, valueFunc_x, gridSf, gridSm, gridP, pv, simParam);
+            results.(name).(['moments_exog_' variants{v}]) = compute_moments(panel, simParam, pv);
+            results.(name).(['fw_exog_' variants{v}])      = fiscal_welfare(panel, pv);
+        end
+    end
 
     save(sprintf('solutionSP_%s.mat', name), 'solutionSP', 'param', 'gridSf', 'gridSm', 'gridP', '-v7.3');
 end
@@ -105,16 +143,10 @@ end
 save('PolicyCounterfactuals_results.mat', 'results', '-v7.3');
 
 % ---- 6. Table 5 (with/without endogenous marriage) and Tables 7-10 ----
-mb = results.baseline.moments_endog;  mx = results.baseline.moments_exog;
-fprintf('\nTable 5: marital wage premium / unemployment marital gap\n');
-fprintf('  without endogenous marriage: %+6.2f%% / %+5.2f p.p.\n', ...
-    100*(mx.stats_wages.married/mx.stats_wages.never_married - 1), ...
-    100*(mx.married.unemployed - mx.never_married.unemployed));
-fprintf('  with endogenous marriage:    %+6.2f%% / %+5.2f p.p.\n', ...
-    100*(mb.stats_wages.married/mb.stats_wages.never_married - 1), ...
-    100*(mb.married.unemployed - mb.never_married.unemployed));
-
-policy_tables(results, results.baseline.param);
+table5_decomposition(results.baseline);
+if run_policies
+    policy_tables(results, results.baseline.param);
+end
 
 %==========================================================================
 %% POLICY PARAMETER CHANGES (applied inside Param_Gen)

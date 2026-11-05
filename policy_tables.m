@@ -9,7 +9,9 @@ function tabs = policy_tables(results, param, outfile)
 %                      group (endogenous-marriage model)
 %     Tables 8 and 10: % change in the marriage rate, aggregate welfare (CE)
 %                      and fiscal expenditure, with and without endogenous
-%                      marital choices
+%                      marital choices; without them, also with sorting and
+%                      with selection and sorting (fw_exog_sort,
+%                      fw_exog_selsort), when computed
 %   The tables are also written to outfile (default 'policy_tables.csv').
 
 if nargin < 3 || isempty(outfile), outfile = 'policy_tables.csv'; end
@@ -19,6 +21,10 @@ groups = {'never_married', 'Singles'; 'married', 'Married'; 'women', 'Women'; ..
           'men', 'Men'; 'haschild', 'Agents with a child'; 'nochild', 'Agents without a child'};
 policies = {'ub_plus15',     'Tables 7-8: 15% higher unemployment benefits (b_min)'; ...
             'credit_plus20', 'Tables 9-10: 20% higher income caps for child-based tax credits'};
+
+exogVariants = {'exog',         'Without Endogenous Marital Choices';
+                'exog_sort',    '  ... with sorting';
+                'exog_selsort', '  ... with selection and sorting'};
 
 pc = @(new, old) 100*(new/old - 1);
 ce = @(Wnew, Wold) 100*((Wnew/Wold)^(1/(1-gam)) - 1);
@@ -45,17 +51,23 @@ for p = 1:size(policies,1)
     % Marriage rates, welfare and fiscal expenditure
     mr = pc(pol.moments_endog.married.all, base.moments_endog.married.all);
     wn = ce(pol.fw_endog.W, base.fw_endog.W);
-    wx = ce(pol.fw_exog.W,  base.fw_exog.W);
     fn = pc(pol.fw_endog.expenditure, base.fw_endog.expenditure);
-    fx = pc(pol.fw_exog.expenditure,  base.fw_exog.expenditure);
-    fprintf('%-36s %15s %18s %20s\n', '', 'Marriage Rates', 'Aggregate Welfare', 'Fiscal Expenditure');
-    fprintf('%-36s %+14.2f%% %+17.2f%% %+19.2f%%\n', 'With Endogenous Marital Choices', mr, wn, fn);
-    fprintf('%-36s %15s %+17.2f%% %+19.2f%%\n', 'Without Endogenous Marital Choices', '-', wx, fx);
+    fprintf('%-52s %15s %18s %20s\n', '', 'Marriage Rates', 'Aggregate Welfare', 'Fiscal Expenditure');
+    fprintf('%-52s %+14.2f%% %+17.2f%% %+19.2f%%\n', 'With Endogenous Marital Choices', mr, wn, fn);
     rows(end+1,:) = {policies{p,1}, 'With endogenous marriage', 'Marriage rates (%)',        mr}; %#ok<AGROW>
     rows(end+1,:) = {policies{p,1}, 'With endogenous marriage', 'Aggregate welfare (CE, %)', wn}; %#ok<AGROW>
     rows(end+1,:) = {policies{p,1}, 'With endogenous marriage', 'Fiscal expenditure (%)',    fn}; %#ok<AGROW>
-    rows(end+1,:) = {policies{p,1}, 'Without endogenous marriage', 'Aggregate welfare (CE, %)', wx}; %#ok<AGROW>
-    rows(end+1,:) = {policies{p,1}, 'Without endogenous marriage', 'Fiscal expenditure (%)',    fx}; %#ok<AGROW>
+    % Without endogenous marriage: random matching, and (if computed) with
+    % sorting and with selection and sorting, all held at baseline values
+    for v = 1:size(exogVariants,1)
+        fld = ['fw_' exogVariants{v,1}];
+        if ~isfield(pol, fld) || ~isfield(base, fld), continue; end
+        wx = ce(pol.(fld).W, base.(fld).W);
+        fx = pc(pol.(fld).expenditure, base.(fld).expenditure);
+        fprintf('%-52s %15s %+17.2f%% %+19.2f%%\n', exogVariants{v,2}, '-', wx, fx);
+        rows(end+1,:) = {policies{p,1}, exogVariants{v,2}, 'Aggregate welfare (CE, %)', wx}; %#ok<AGROW>
+        rows(end+1,:) = {policies{p,1}, exogVariants{v,2}, 'Fiscal expenditure (%)',    fx}; %#ok<AGROW>
+    end
 end
 
 fid = fopen(outfile, 'w');
